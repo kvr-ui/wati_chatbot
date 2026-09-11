@@ -1,0 +1,221 @@
+# FOCAS chatbot playground (OpenAI + knowledge base)
+
+A WhatsApp bot for [WATI](https://www.wati.io/). Incoming messages hit a webhook, get matched
+against your keyword triggers, and are answered either with a fixed reply or with an AI
+answer (**Claude** or **OpenAI**) grounded in your own knowledge base.
+
+```
+WhatsApp -> WATI -> POST /webhook/wati -> keyword match ─┬─ static reply
+                                                         ├─ AI answer (knowledge base + Claude/GPT)
+                                                         └─ handover to a human (bot goes quiet)
+                                            reply sent back via WATI sendSessionMessage
+```
+
+## 1. Setup
+
+```bash
+npm install
+cp .env.example .env      # then fill in the values
+```
+
+**WATI credentials** — WATI dashboard → *API Docs* (or *Settings → API*):
+
+| .env key | Where to find it |
+|---|---|
+| `WATI_API_ENDPOINT` | The API endpoint shown there, e.g. `https://live-mt-server.wati.io/123456` |
+| `WATI_ACCESS_TOKEN` | The Access Token / JWT — paste it **without** the leading `Bearer ` |
+
+**AI provider** — `AI_PROVIDER=openai` is the default, using `gpt-4o-mini`. Set `AI_PROVIDER=claude` only to explicitly select Claude.
+
+| .env key | Notes |
+|---|---|
+| `ANTHROPIC_API_KEY` | The gateway token (or a console.anthropic.com key). Used when `AI_PROVIDER=claude`. |
+| `ANTHROPIC_BASE_URL` | Custom gateway, e.g. `https://ai.focasedu.online/v1/messages`. Leave blank for Anthropic direct. A full `/v1/messages` URL is fine — it is reduced to the origin, since the SDK appends the path itself. |
+| `ANTHROPIC_AUTH_STYLE` | `x-api-key` (default) or `bearer`, depending on what the gateway expects. |
+| `ANTHROPIC_MODEL` | Default `claude-opus-5`. For a cheaper/faster FAQ bot use `claude-haiku-4-5` or `claude-sonnet-5`. |
+| `ANTHROPIC_EFFORT` | Reasoning depth: `low` (default, right for FAQ replies) through `max`. |
+| `OPENAI_API_KEY` | Used when `AI_PROVIDER=openai`, and **always** for semantic knowledge-base search. |
+
+The selected provider must have its own key; the bot never silently switches providers.
+Verify with `npm run check:ai`.
+
+### Knowledge-base search modes
+
+Retrieval uses `KB_SEARCH_MODE=auto` by default: semantic search when embeddings work,
+with keyword search over the same files if embeddings are unavailable. Set
+`KB_SEARCH_MODE=lexical` to skip embeddings entirely.
+
+- **`OPENAI_API_KEY` set** → semantic search (embeddings). Understands that "do you help with
+  jobs" relates to a *Placement* section. Recommended.
+- **Claude only** → keyword search over the same chunks. No extra cost or setup, but it only
+  matches words that actually appear in your text. Keyword triggers with `kbFilter` cover the
+  gap: a scoped trigger always returns its section regardless of word overlap.
+
+You can run Claude for answers *and* OpenAI purely for search — set both keys with
+`AI_PROVIDER=claude`.
+
+## 2. Put your knowledge in
+
+Everything the bot is allowed to say lives in [knowledge/](knowledge/).
+
+- One `.md` file per topic — `30-fees-class-pricing.md`, `20-timings-and-slots.md`, and so on.
+  Each file is one searchable chunk, so you edit one small file to change one answer.
+  See [docs/knowledge-base-guide.md](docs/knowledge-base-guide.md) for the format and the rules.
+- [knowledge/keywords.json](knowledge/keywords.json) — the keyword triggers.
+
+Check your edits any time with:
+
+```bash
+npm run check:kb
+```
+
+Then build the search index:
+
+```bash
+npm run ingest
+```
+
+Re-run that (or `curl -X POST localhost:3000/reindex`) whenever you edit knowledge files.
+`keywords.json` needs no re-index — it reloads on every message.
+
+### Trigger format
+
+```json
+{
+  "id": "fees",
+  "match": "contains",
+  "keywords": ["fee", "price", "how much"],
+  "action": "ai",
+  "kbFilter": "fee",
+  "prompt": "Never guess a price."
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `match` | `exact` (whole message), `starts_with`, `contains` (whole word anywhere), `regex` |
+| `action` | `reply` = send `reply` text · `ai` = answer from the knowledge base · `handover` = pause the bot for a human · `resume` = un-pause it |
+| `reply` | Text to send. Accepts `{{name}}` and `{{bot}}`. May be an array to send several messages. |
+| `kbFilter` | Only search knowledge sections whose heading/filename contains this word |
+| `prompt` | Extra instruction passed to the model for this topic |
+| `priority` | Optional tie-breaker. Defaults: exact 100, starts_with 60, regex 40, contains 20 |
+
+Plurals are tolerated automatically (`fee` matches `fees`). Matching is case- and
+punctuation-insensitive. If nothing matches, the bot answers from the knowledge base anyway
+(set `AI_FALLBACK_ENABLED=false` to send a fixed fallback message instead).
+
+## 3. Test locally before touching WhatsApp
+
+```bash
+cd /home/sandy/Downloads/Focas/wati_chat-bot
+npm run dev
+```
+
+Open **http://127.0.0.1:3000**. Ask a question or choose a sample prompt. The page
+uses the same triggers, knowledge retrieval and conversation logic as the WATI handler.
+Greetings and menu commands use saved replies; questions use OpenAI. Each AI answer shows
+the retrieved knowledge files for review. These are retrieval context, not model citations.
+
+- **New conversation** clears that browser conversation's server memory.
+- **Knowledge base** lets you read the 28 existing knowledge files.
+- Edit files in `knowledge/`, then use **Refresh knowledge** and start a new chat.
+- Conversation memory lasts until inactivity expiry or server restart. Reloading the page
+  starts a new browser conversation; the page does not persist chat transcripts.
+- Errors appear in the composer with a retry button; failed requests do not enter memory.
+- `WHATSAPP_ENABLED=false` disables the webhook and removes the need for WATI credentials.
+  Preview sessions are isolated from WhatsApp contacts. Handover replies are simulations;
+  they do not notify an agent or change WATI read status.
+- `HOST=127.0.0.1` keeps this development playground local. Keep it local during testing;
+  the testing endpoints have no login. Add access control before hosting it publicly.
+- API keys stay in the server's `.env`; they are never sent to the browser.
+
+Run the offline integration checks with `npm test`. They exercise the real API routes and
+OpenAI request construction with a local mock provider, without contacting OpenAI or WATI.
+
+
+```bash
+npm run chat            # terminal chat with the same logic; type /why to see how a reply was chosen
+npm run check:ai        # verify the AI provider answers
+npm run check:ai -- claude   # force one provider
+npm run check:wati      # verify WATI credentials
+```
+
+Or run the server and poke it:
+
+```bash
+npm start
+curl "localhost:3000/match?text=what%20are%20the%20fees"
+curl -X POST localhost:3000/simulate -H 'content-type: application/json' -d '{"text":"hi"}'
+
+# compare providers on the same question
+curl -X POST localhost:3000/simulate -H 'content-type: application/json' \
+  -d '{"text":"what are the fees","provider":"claude"}'
+```
+
+## 4. Connect WATI later
+
+After browser testing, configure WATI credentials and webhook authentication, protect or
+remove the testing endpoints from the public deployment, set `WHATSAPP_ENABLED=true`,
+and bind to the appropriate interface (`HOST=0.0.0.0` for a container). Restart the server.
+Browser testing alone does not validate production delivery or human handover operations.
+
+
+1. Expose the server publicly — `ngrok http 3000` while testing, or deploy it (any Node host).
+2. WATI dashboard → **Settings → Webhooks → Add Webhook**.
+3. URL: `https://your-domain.com/webhook/wati`
+   (if you set `WEBHOOK_VERIFY_TOKEN`, append `?token=YOUR_TOKEN`).
+4. Enable the **Message Received** event. Leave the others off — the bot ignores them anyway.
+5. Message your WATI number from WhatsApp.
+
+## Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/webhook/wati` | WATI incoming-message webhook |
+| GET | `/` | Browser chat playground |
+| POST | `/api/chat` | `{ "sessionId": "unique-id", "text": "..." }` → test reply and retrieved sources |
+| DELETE | `/api/chat/:sessionId` | Clear a browser conversation |
+| GET | `/api/knowledge` | Knowledge file titles and contents |
+| POST | `/simulate` | `{ "text": "...", "provider": "claude" }` → the reply, without sending anything to WhatsApp |
+| GET | `/match?text=...` | Which trigger a phrase hits |
+| POST | `/reindex` | Re-embed the knowledge base after editing files |
+| GET | `/health` | Index size, trigger count, active sessions |
+
+## How it behaves
+
+- **24-hour window.** Free-form replies only work within 24h of the customer's last message —
+  that is a WhatsApp rule, not a bot limitation. To start a conversation, use an approved
+  template via `sendTemplateMessage()` in [src/wati.js](src/wati.js).
+- **Human handover.** After a `handover` trigger the bot stays silent for
+  `HANDOVER_PAUSE_MINUTES` (default 60) so your agent can take the chat. The customer typing
+  `bot` brings it back.
+- **Memory.** The last 12 turns per contact are kept in memory and dropped after
+  `SESSION_TTL_MINUTES` of silence. It is a `Map` in [src/sessions.js](src/sessions.js) —
+  replace it with Redis if you run more than one instance.
+- **Grounding.** The model is instructed to answer only from retrieved knowledge chunks and to
+  offer a human when it does not know. Retrieval below `KB_MIN_SCORE` is dropped, except when a
+  trigger's `kbFilter` already scoped the search to one section.
+- **Refusals (Claude).** Requests use server-side refusal fallbacks, so a declined request is
+  retried on a fallback model inside the same call.
+- **Gateway compatibility.** Older Anthropic-compatible proxies may reject newer request
+  fields. On a 400 the provider drops `fallbacks`, then `output_config.effort`, logs one
+  warning each, and retries — so a limited gateway still works at reduced features rather
+  than failing. Verify what yours accepts with `npm run check:ai -- claude`.
+- **Duplicates.** Repeated webhook deliveries of the same message id are ignored.
+
+## Files
+
+| Path | Role |
+|---|---|
+| [src/server.js](src/server.js) | Local server startup and indexing |
+| [src/app.js](src/app.js) | Express app, browser API, webhook parsing and routes |
+| [public/](public/) | Chat playground UI |
+| [src/handler.js](src/handler.js) | The brain: trigger → action → reply |
+| [src/keywords.js](src/keywords.js) | Trigger loading and matching |
+| [src/kb.js](src/kb.js) | Chunking, embedding, cosine search |
+| [src/ai.js](src/ai.js) | Retrieval, prompt assembly, provider dispatch |
+| [src/providers/claude.js](src/providers/claude.js) | Anthropic SDK call (adaptive thinking, refusal fallbacks) |
+| [src/providers/openai.js](src/providers/openai.js) | OpenAI chat completion call |
+| [src/wati.js](src/wati.js) | WATI send API (session, template, buttons) |
+| [src/sessions.js](src/sessions.js) | Per-contact memory, handover pause, de-dup |
+# wati_chatbot
