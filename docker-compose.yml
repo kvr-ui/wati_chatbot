@@ -7,7 +7,6 @@ services:
   bot:
     build: .
     image: wati-chatbot:latest
-    container_name: wati-chatbot
     restart: unless-stopped
 
     # Reads WATI, Claude, OpenAI and Mongo credentials from the same .env the
