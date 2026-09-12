@@ -41,7 +41,7 @@
         "ஹாய்"
       ],
       "action": "reply",
-      "reply": "Hello {{name}}! 👋 I'm {{bot}}.\n\nI can help you with:\n1. Our Fastrack Classes\n2. Fees and payment\n3. The Last Attempt Kit\n4. Class timings and slots\n\nJust type your question, or send *menu* anytime."
+      "reply": "Hello {{name}}! 👋 I'm {{bot}}.\n\nI can help you with:\n1. Our classes\n2. Fees and payment\n3. The Last Attempt Kit\n4. Class timings and slots\n\nJust type your question, or send *menu* anytime."
     },
     {
       "id": "menu",
@@ -53,7 +53,7 @@
         "main menu"
       ],
       "action": "reply",
-      "reply": "*How can I help?*\n\n- Type *classes* to hear about our Fastrack Classes\n- Type *fees* for pricing\n- Type *kit* for the Last Attempt Kit\n- Type *timings* for the class slots\n- Type *brochure* to get our brochure\n- Type *agent* to talk to a human"
+      "reply": "*How can I help?*\n\n- Type *classes* to hear about our classes\n- Type *fees* for pricing\n- Type *kit* for the Last Attempt Kit\n- Type *timings* for the class slots\n- Type *brochure* to get our brochure\n- Type *agent* to talk to a human"
     },
     {
       "id": "menu_1",
@@ -65,7 +65,7 @@
       ],
       "action": "ai",
       "kbFilter": "course",
-      "prompt": "The user picked option 1 from our menu: our Fastrack Classes. Answer on that topic only."
+      "prompt": "The user picked option 1 from our menu: our classes. Answer on that topic only."
     },
     {
       "id": "menu_2",
@@ -246,7 +246,6 @@
         "syllabus",
         "curriculum",
         "subjects",
-        "fastrack",
         "tutor",
         "mentorship",
         "clas",

@@ -35,7 +35,7 @@ after(async () => { await Promise.all([server, mock].filter(Boolean).map((s) => 
 
 test('playground loads without WATI credentials; no secrets in configuration', async () => {
   const html = await (await fetch(base)).text();
-  assert.match(html, /FOCAS Chat Test/);
+  assert.match(html, /FOCASEdu Chat Test/);
   const health = await (await fetch(`${base}/health`)).json();
   assert.equal(health.provider, 'openai');
   assert.equal(health.whatsappEnabled, false);

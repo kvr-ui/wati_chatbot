@@ -1,4 +1,4 @@
-# FOCAS chatbot playground (OpenAI + knowledge base)
+# FOCASEdu chatbot playground (OpenAI + knowledge base)
 
 A WhatsApp bot for [WATI](https://www.wati.io/). Incoming messages hit a webhook, get matched
 against your keyword triggers, and are answered either with a fixed reply or with an AI

@@ -11,6 +11,6 @@ CA Intermediate: both groups, kit included: ₹55,000.
 Both CA Intermediate group-package prices include tutor live sessions, recorded lectures, tests
 and the Last Attempt Kit.
 
-Send: Our Fastrack Classes are ₹30,000 for one group and ₹55,000 for both groups — live tutor
+Send: Our classes are ₹30,000 for one group and ₹55,000 for both groups — live tutor
 sessions, recorded lectures, tests and the Last Attempt Kit are all included. Shall we share the
 brochure?

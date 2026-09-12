@@ -1,12 +1,7 @@
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { config } from './config.js';
+import { openDatabase } from './db.js';
 
-const dbFile = config.feedback.dbFile;
-if (dbFile !== ':memory:') mkdirSync(dirname(dbFile), { recursive: true });
-
-const db = new DatabaseSync(dbFile);
+const db = openDatabase(config.feedback.dbFile);
 db.exec(`
   CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

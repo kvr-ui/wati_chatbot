@@ -1,6 +1,6 @@
-# FOCAS Edu — Internal Sales Playbook
+# FOCASEdu — Internal Sales Playbook
 
-Source: FOCAS Edu LLM Knowledge Base v1.1. This file is **deliberately outside `knowledge/`**
+Source: FOCASEdu LLM Knowledge Base v1.1. This file is **deliberately outside `knowledge/`**
 so it is NOT indexed by the bot. It is guidance for human counsellors and outbound calls.
 
 Everything a student may be told lives in the per-topic files under `knowledge/`.
@@ -59,7 +59,7 @@ Duration: about 5 minutes on average.
 - Never chase — only guide.
 - Average sales cycle is 2 weeks or less. Maximum 4 follow-ups.
 
-## FOCAS Commandments for Sales
+## FOCASEdu Commandments for Sales
 
 1. Never sell fear — sell clarity.
 2. Don't pitch price — pitch progress.

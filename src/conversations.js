@@ -1,7 +1,5 @@
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { config } from './config.js';
+import { openDatabase } from './db.js';
 
 /**
  * Durable conversation log.
@@ -12,10 +10,7 @@ import { config } from './config.js';
  * truth, and the leads table is a cache you can always rebuild.
  */
 
-const dbFile = config.conversations.dbFile;
-if (dbFile !== ':memory:') mkdirSync(dirname(dbFile), { recursive: true });
-
-const db = new DatabaseSync(dbFile);
+const db = openDatabase(config.conversations.dbFile);
 db.exec(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
