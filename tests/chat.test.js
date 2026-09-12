@@ -280,10 +280,19 @@ test('the Jan 2027 ad opens with the group question and answers with the matchin
   assert.equal(stored.group, 'Group 2');
   assert.equal(stored.status, 'answered');
 
-  // From here the bot is back to normal answering, and never asks again.
+  // From here the bot is back to normal answering, and never asks again. A
+  // question that happens to carry the ad phrase is still answered as one.
   const after = await post('Jan 2027 - what are the fees?', session);
   assert.notEqual(after.data.meta.reason, 'campaign_group_asked');
   assert.match(after.data.replies[0], /₹/);
+
+  // Replying to the ad a second time is met with the group already on file,
+  // not the question again and not a stranger's welcome line.
+  const again = await post('JAN 2027', session);
+  assert.equal(again.data.meta.reason, 'campaign_returning_lead');
+  assert.match(again.data.replies[0], /Welcome back/);
+  assert.match(again.data.replies[0], /Group 2 in January 2027/);
+  assert.ok(!again.data.replies[0].includes('Which group'));
 
   // Naming a group counts as a buying signal on the lead record.
   const { lead } = await (await fetch(`${base}/api/leads/preview%3A${session}`)).json();

@@ -28,6 +28,20 @@ export function matchesUnlockPhrase(text) {
 }
 
 /**
+ * True when the message is nothing *but* a campaign phrase - the bare reply to
+ * the ad, with no question attached. "Jan 2027 - what are the fees?" carries a
+ * real question and must be answered as one, so it is deliberately excluded.
+ */
+export function isBareUnlockPhrase(text) {
+  const haystack = normalize(text);
+  if (!haystack) return false;
+  return config.whatsappUnlockPhrases
+    .map(normalize)
+    .filter(Boolean)
+    .some((phrase) => haystack === phrase);
+}
+
+/**
  * Has this number already opted in? Checks memory first, then the database for
  * opt-ins made before the last restart.
  *

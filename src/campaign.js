@@ -1,6 +1,6 @@
 import { normalizeWaId } from './config.js';
 import { campaign as campaignCollection } from './mongo.js';
-import { matchesUnlockPhrase } from './optin.js';
+import { matchesUnlockPhrase, isBareUnlockPhrase } from './optin.js';
 
 /**
  * The January 2027 campaign script.
@@ -33,6 +33,18 @@ export const groupPitch = (group) => [
   'We have work to do! And less than 3.5 months to do it in.',
   'We offer Recorded lectures, Live Tutor Study-along sessions, an Infinite Question Bank, Test Series with video reviews and a Planner and Manual to go along with.',
   'If you have any questions about any specific offering, feel free to ask!',
+].join('\n');
+
+/**
+ * Sent when a lead who has already been through the script replies to the ad
+ * again. It greets them by the group they picked rather than asking anew.
+ */
+export const returningWelcome = ({ name = null, group = null } = {}) => [
+  `Welcome back${name ? `, ${name}` : ''}! 👋`,
+  group
+    ? `You already told us you're taking ${group} in January 2027.`
+    : 'Good to hear from you again about January 2027.',
+  'Ask me anything about classes, fees, timings or the Last Attempt Kit.',
 ].join('\n');
 
 const REASK = [
@@ -93,7 +105,7 @@ async function getState(key) {
   try {
     const doc = await (await campaignCollection()).findOne({ waId: key });
     if (!doc) return null;
-    const state = { status: doc.status, asked: doc.asked ?? 0, group: doc.group ?? null };
+    const state = { status: doc.status, asked: doc.asked ?? 0, group: doc.group ?? null, name: doc.name ?? null };
     memory.set(key, state);
     return state;
   } catch (err) {
@@ -153,6 +165,17 @@ export async function campaignStep({ waId, name = null, text }) {
     return null;
   }
 
+  // A lead who has been through the script sometimes replies to the ad a second
+  // time. The question is never repeated - but a bare "Jan 2027" carries no
+  // question either, so answer it as the returning lead it is instead of
+  // letting the knowledge base greet them like a stranger.
+  if (state && isBareUnlockPhrase(text)) {
+    return {
+      replies: [returningWelcome({ name: name || state.name, group: state.group })],
+      meta: { reason: 'campaign_returning_lead', group: state.group ?? null },
+    };
+  }
+
   // Only an untouched lead starts the script, so a lead who answered once (or
   // was let through) is never asked again, however often the ad phrase recurs.
   if (!state && matchesUnlockPhrase(text)) {
@@ -168,7 +191,7 @@ export async function loadCampaignState() {
   try {
     const docs = await (await campaignCollection()).find({}).toArray();
     for (const doc of docs) {
-      memory.set(doc.waId, { status: doc.status, asked: doc.asked ?? 0, group: doc.group ?? null });
+      memory.set(doc.waId, { status: doc.status, asked: doc.asked ?? 0, group: doc.group ?? null, name: doc.name ?? null });
     }
   } catch (err) {
     console.error('campaign load failed:', err.message);
