@@ -207,6 +207,16 @@ Browser testing alone does not validate production delivery or human handover op
   the top of [src/campaign.js](src/campaign.js) — edit `GROUPS`, `GROUP_QUESTION` and
   `groupPitch` there. Note the "less than 3.5 months" line is fixed text and will need editing
   as the exam gets closer. `/health` reports the per-group counts under `campaignGroups`.
+- **Installments.** The bot may offer the 2-installment split (classes only — the Kit is paid in
+  full), but it never states, splits or confirms an amount, due date or schedule, even if the
+  student does the arithmetic and asks it to confirm; the team shares the figures. The rule is
+  written into both [32-fees-discounts-and-installments.md](knowledge/32-fees-discounts-and-installments.md)
+  and [34-fees-installment-close.md](knowledge/34-fees-installment-close.md), and repeated in the
+  `fees` trigger prompt. The closing line *"We can also split this into 2 installments if that
+  helps. Shall we get you started?"* lives in file 34 and is used only once a lead already knows
+  the price and is hesitating — never as an opening offer. **If you edit either file, keep it
+  under the 900-character `chunkSize`**: a longer file is split, and the offer can then be
+  retrieved without the rule attached. A test guards this.
 - **Human handover.** After a `handover` trigger the bot stays silent for
   `HANDOVER_PAUSE_MINUTES` (default 60) so your agent can take the chat. The customer typing
   `bot` brings it back.

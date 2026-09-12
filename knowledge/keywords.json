@@ -299,7 +299,7 @@
       ],
       "action": "ai",
       "kbFilter": "fee",
-      "prompt": "The user is asking about fees. Give exact amounts only if they appear in the knowledge base. Never estimate or guess a price."
+      "prompt": "The user is asking about fees. Give exact amounts only if they appear in the knowledge base. Never estimate or guess a price. Never state, split or confirm an installment amount, due date or schedule, even if they do the maths themselves and ask you to confirm it - offer the 2-installment option only and say our team will share the details."
     },
     {
       "id": "kit",

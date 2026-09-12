@@ -288,3 +288,27 @@ test('a lead who never names a group is let through after the second ask', async
   assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
   assert.equal((await post('jan 2027', session)).data.meta.reason, 'campaign_group_asked');
 });
+
+test('the installment offer never travels without its no-amounts rule', async () => {
+  const { buildChunks, search, ensureIndex } = await import('../src/kb.js');
+  await ensureIndex({ log: () => {} });
+
+  // The offer and the restriction must land in the SAME chunk. They sit in one
+  // file, and a file over KB chunkSize is split - which would let the model
+  // retrieve "we can split this into 2 installments" with no rule attached.
+  const offers = buildChunks().filter((c) => /2 installments/i.test(c.text));
+  assert.ok(offers.length >= 2, 'expected the discount reply and the closing line');
+  for (const chunk of offers) {
+    assert.match(chunk.text, /NEVER state, split or confirm an installment amount/,
+      `${chunk.source} offers installments without the no-amounts rule`);
+  }
+
+  // A lead hesitating on price reaches the closing line; the fees filter keeps it in scope.
+  const hits = await search('can I pay in 2 parts', { filter: 'fee' });
+  assert.equal(hits[0].source, '34-fees-installment-close.md');
+
+  // The fees trigger carries the same rule, for the path that skips retrieval ranking.
+  const { trigger } = await (await fetch(`${base}/match?text=${encodeURIComponent('emi available?')}`)).json();
+  assert.equal(trigger.id, 'fees');
+  assert.match(trigger.prompt, /Never state, split or confirm an installment amount/);
+});
