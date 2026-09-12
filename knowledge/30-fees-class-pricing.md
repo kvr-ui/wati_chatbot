@@ -12,5 +12,4 @@ Both CA Intermediate group-package prices include tutor live sessions, recorded 
 and the Last Attempt Kit.
 
 Send: Our classes are ₹30,000 for one group and ₹55,000 for both groups — live tutor
-sessions, recorded lectures, tests and the Last Attempt Kit are all included. Shall we share the
-brochure?
+sessions, recorded lectures, tests and the Last Attempt Kit are all included.

@@ -2,11 +2,11 @@
 
 Also asked as: ब्रोशर, विवरण, ப்ரோஷர்.
 
-Asked as: brochure, broucher, pdf, details pdf, send it, send me, share it, yes send, sure,
-please send, i want details, more details, catalogue pdf.
+Asked as: brochure, broucher, pdf, details pdf, catalogue pdf, send the brochure, send me the
+pdf, share the brochure, i want details, more details.
 
-Our introductory message offers a brochure, so a plain "yes", "sure" or "send it" after that
-offer is a brochure request.
+We never offer the brochure ourselves, so a bare "yes", "sure" or "send it" answers whatever we
+asked last - it is NOT a brochure request. Only an explicit ask belongs here.
 
 NEVER say we do not have the brochure or cannot share it.
 Tell the student our team has been informed and will share it shortly.
