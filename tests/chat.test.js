@@ -198,3 +198,93 @@ test('every exchange is stored, scored, and exportable for training', async () =
   assert.equal((await fetch(`${base}/api/leads?stage=bogus`)).status, 400);
   assert.equal((await fetch(`${base}/api/leads/preview%3Anobody`)).status, 404);
 });
+
+test('the campaign phrase opts in one lead at a time and survives a restart', async () => {
+  const { matchesUnlockPhrase, isOptedIn, optIn, loadOptIns } = await import('../src/optin.js');
+
+  assert.ok(matchesUnlockPhrase('Hi, I saw the ad for the JAN-2027 batch'));
+  assert.ok(matchesUnlockPhrase('interested in January 2027'));
+  assert.ok(!matchesUnlockPhrase('what are the fees'));
+  assert.ok(!matchesUnlockPhrase('is the jan 2026 batch still open'));
+
+  const lead = '919000000001';
+  const other = '919000000002';
+  assert.equal(await isOptedIn(lead), false);
+  await optIn(lead, { name: 'Lead', text: 'Jan 2027 batch details please' });
+
+  // Only that one number is unlocked; the next contact is still ignored.
+  assert.equal(await isOptedIn(lead), true);
+  assert.equal(await isOptedIn(other), false);
+  assert.equal(await isOptedIn('+91 90000 00001'), true);
+
+  const stored = await (await getDb()).collection(config.mongo.optins).findOne({ waId: lead });
+  assert.equal(stored.text, 'Jan 2027 batch details please');
+  assert.ok((await loadOptIns()) >= 1);
+
+  const health = await (await fetch(`${base}/health`)).json();
+  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027']);
+  assert.equal(typeof health.whatsappOptIns, 'number');
+  assert.ok(!JSON.stringify(health).includes(lead)); // real numbers stay out of /health
+});
+
+test('the Jan 2027 ad opens with the group question and answers with the matching pitch', async () => {
+  const { matchGroup } = await import('../src/campaign.js');
+
+  // Free-text answers are read as a group; anything else is not.
+  assert.equal(matchGroup('2'), 'Group 2');
+  assert.equal(matchGroup('grp-1'), 'Group 1');
+  assert.equal(matchGroup('Group 1 and Group 2'), 'Both Groups');
+  assert.equal(matchGroup('unit 2d'), 'Unit 2D');
+  assert.equal(matchGroup('2d'), 'Unit 2D'); // the bare 2 must not win here
+  assert.equal(matchGroup('not sure yet'), null);
+
+  const session = 'campaign';
+  // The ad message is answered with the question alone - nothing else.
+  const asked = await post('Hi, I saw the ad for the JAN-2027 batch', session);
+  assert.equal(asked.data.meta.reason, 'campaign_group_asked');
+  assert.equal(asked.data.replies.length, 1);
+  assert.match(asked.data.replies[0], /Which group are you planning to take the exam in January 2027\?/);
+  assert.match(asked.data.replies[0], /4\. Unit 2D/);
+
+  // An unclear answer is re-asked exactly once.
+  const reask = await post('what is the difference between them', session);
+  assert.equal(reask.data.meta.reason, 'campaign_group_reask');
+  assert.match(reask.data.replies[0], /Which group are you planning/);
+
+  // Answering echoes the chosen group back inside the offerings message.
+  const answered = await post('Group 2', session);
+  assert.equal(answered.data.meta.reason, 'campaign_group_answered');
+  assert.equal(answered.data.meta.group, 'Group 2');
+  assert.match(answered.data.replies[0], /we offer classes for Group 2/);
+  assert.match(answered.data.replies[0], /less than 3\.5 months/);
+  assert.match(answered.data.replies[0], /Infinite Question Bank/);
+
+  // The answer is stored, so a restart cannot lose it or re-ask the question.
+  const stored = await (await getDb()).collection(config.mongo.campaign).findOne({ waId: `preview:${session}` });
+  assert.equal(stored.group, 'Group 2');
+  assert.equal(stored.status, 'answered');
+
+  // From here the bot is back to normal answering, and never asks again.
+  const after = await post('Jan 2027 - what are the fees?', session);
+  assert.notEqual(after.data.meta.reason, 'campaign_group_asked');
+  assert.match(after.data.replies[0], /₹/);
+
+  // Naming a group counts as a buying signal on the lead record.
+  const { lead } = await (await fetch(`${base}/api/leads/preview%3A${session}`)).json();
+  assert.ok(lead.signals.some((s) => s.id === 'campaign_group'));
+});
+
+test('a lead who never names a group is let through after the second ask', async () => {
+  const session = 'campaign-giveup';
+  assert.equal((await post('interested in January 2027', session)).data.meta.reason, 'campaign_group_asked');
+  assert.equal((await post('hmm', session)).data.meta.reason, 'campaign_group_reask');
+
+  // Asked twice is enough: the third message is answered normally, not scripted.
+  const third = await post('what are the fees for one group?', session);
+  assert.notEqual(third.data.meta.reason, 'campaign_group_reask');
+  assert.match(third.data.replies[0], /₹/);
+
+  // Resetting the playground chat lets a tester run the script from the top.
+  assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
+  assert.equal((await post('jan 2027', session)).data.meta.reason, 'campaign_group_asked');
+});

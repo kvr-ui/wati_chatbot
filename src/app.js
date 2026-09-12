@@ -6,6 +6,8 @@ import { sendSessionMessage } from './wati.js';
 import { ensureIndex, indexStats, buildChunks } from './kb.js';
 import { isNewMessage, deleteSession, stats as sessionStats } from './sessions.js';
 import { matchTrigger, listTriggerIds } from './keywords.js';
+import { matchesUnlockPhrase, isOptedIn, optIn, optInCount } from './optin.js';
+import { groupCounts, resetCampaign } from './campaign.js';
 import { listFeedback, saveFeedback } from './feedback.js';
 import {
   listLeads, getLead, conversationStats, rescoreAll, exportTrainingJsonl, exportLeadsCsv,
@@ -64,6 +66,25 @@ function isAllowed(waId) {
   return allowed.size === 0 || allowed.has(normalizeWaId(waId));
 }
 
+/**
+ * Decides whether one inbound message may be answered.
+ *
+ * Numbers in WHATSAPP_ALLOWED_NUMBERS are always answered. Anyone else stays
+ * ignored until they send the campaign phrase (WHATSAPP_UNLOCK_PHRASE - the
+ * "Jan 2027" ad message). That message opts in that single number, so the bot
+ * replies to that lead from then on and still to nobody else.
+ */
+async function admit(event) {
+  if (isAllowed(event.waId)) return { ok: true, reason: 'allowlist' };
+  if (await isOptedIn(event.waId)) return { ok: true, reason: 'opted_in' };
+  if (matchesUnlockPhrase(event.text)) {
+    await optIn(event.waId, { name: event.name, text: event.text });
+    log(`opt-in: ${event.waId} sent the campaign phrase; replying to this lead from now on`);
+    return { ok: true, reason: 'opt_in_phrase' };
+  }
+  return { ok: false, reason: 'not allowed and has not sent the campaign phrase' };
+}
+
 async function processEvent(event) {
   const { replies, meta } = await handleMessage(event);
   log(`<- ${event.waId} "${event.text}"`, JSON.stringify(meta));
@@ -90,20 +111,28 @@ app.post('/webhook/wati', (req, res) => {
   const event = parseWatiEvent(req.body);
   if (event.skip) return log('skip:', event.reason);
   if (!event.waId || !event.text) return log('skip: missing waId or text');
-  if (!isAllowed(event.waId)) return log(`skip: ${event.waId} not in WHATSAPP_ALLOWED_NUMBERS`);
+  // De-duplicate before admission so a WATI retry cannot re-run the opt-in.
   if (!isNewMessage(event.messageId)) return log('skip: duplicate', event.messageId);
 
-  processEvent(event).catch(async (err) => {
-    console.error('handler error:', err);
+  // Nothing is ever sent to a contact that was not admitted, errors included.
+  (async () => {
+    const verdict = await admit(event);
+    if (!verdict.ok) return log(`skip: ${event.waId} ${verdict.reason}`);
+
     try {
-      await sendSessionMessage(
-        event.waId,
-        'Sorry, something went wrong on our side. Please try again in a moment.'
-      );
-    } catch (sendErr) {
-      console.error('failed to send error notice:', sendErr.message);
+      await processEvent(event);
+    } catch (err) {
+      console.error('handler error:', err);
+      try {
+        await sendSessionMessage(
+          event.waId,
+          'Sorry, something went wrong on our side. Please try again in a moment.'
+        );
+      } catch (sendErr) {
+        console.error('failed to send error notice:', sendErr.message);
+      }
     }
-  });
+  })().catch((err) => console.error('admission check failed:', err));
 });
 
 app.get('/health', async (_req, res) => {
@@ -117,6 +146,10 @@ app.get('/health', async (_req, res) => {
     botName: config.bot.name,
     whatsappEnabled: config.whatsappEnabled,
     whatsappAllowedNumbers: [...config.whatsappAllowedNumbers],
+    whatsappUnlockPhrases: config.whatsappUnlockPhrases,
+    // A count only: opted-in numbers are real customers, and /health has no login.
+    whatsappOptIns: optInCount(),
+    campaignGroups: groupCounts(),
     kb: indexStats(),
     triggers: listTriggerIds().length,
     conversations,
@@ -157,11 +190,13 @@ app.post(['/api/chat', '/simulate'], async (req, res) => {
   }
 });
 
-app.delete('/api/chat/:sessionId', (req, res) => {
+app.delete('/api/chat/:sessionId', async (req, res) => {
   const id = req.params.sessionId;
   if (!validSession(id)) return res.status(400).json({ error: 'Invalid session ID.' });
   if (busySessions.has(id)) return res.status(409).json({ error: 'Wait for the current reply before starting a new chat.' });
   deleteSession(`preview:${id}`);
+  // Also forget the campaign script, so a tester can run it from the top again.
+  await resetCampaign(`preview:${id}`);
   res.json({ ok: true });
 });
 

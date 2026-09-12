@@ -23,6 +23,12 @@ const num = (v, fallback) => (v === undefined || v === '' || Number.isNaN(Number
 /** WhatsApp ids are bare digits with a country code; accept "+91 98…" style input too. */
 export const normalizeWaId = (v) => String(v ?? '').replace(/\D/g, '');
 
+const phraseList = (v) =>
+  String(v || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 const digitList = (v) =>
   new Set(
     String(v || '')
@@ -39,6 +45,11 @@ export const config = {
   // Safety net for a live WATI account: when non-empty, the bot answers only these
   // numbers and ignores everyone else. Leave blank to reply to all contacts.
   whatsappAllowedNumbers: digitList(process.env.WHATSAPP_ALLOWED_NUMBERS),
+  // Campaign opt-in. A contact outside the allowlist that sends one of these
+  // phrases (the "Jan 2027" ad message) unlocks the bot for itself alone;
+  // everybody else stays ignored. Set WHATSAPP_UNLOCK_PHRASE empty to disable
+  // it and leave the allowlist as the only way in.
+  whatsappUnlockPhrases: phraseList(process.env.WHATSAPP_UNLOCK_PHRASE ?? 'jan 2027, january 2027'),
   webhookVerifyToken: process.env.WEBHOOK_VERIFY_TOKEN || process.env.WATI_WEBHOOK_TOKEN || '',
 
   wati: {
@@ -61,7 +72,10 @@ export const config = {
   },
 
   anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    // Accept a standard Anthropic key and the explicit token name used by the
+    // FOCAS gateway. The latter wins so a gateway token can replace an older
+    // console key without ambiguity.
+    apiKey: process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || '',
     // Custom gateway support. The SDK appends "/v1/messages" itself, so accept a
     // full messages URL and reduce it to the origin.
     baseUrl: normalizeAnthropicBase(process.env.ANTHROPIC_BASE_URL),
@@ -103,6 +117,8 @@ export const config = {
     messages: process.env.MONGODB_MESSAGES_COLLECTION || 'wati_messages',
     leads: process.env.MONGODB_LEADS_COLLECTION || 'wati_leads',
     feedback: process.env.MONGODB_FEEDBACK_COLLECTION || 'wati_feedback',
+    optins: process.env.MONGODB_OPTINS_COLLECTION || 'wati_optins',
+    campaign: process.env.MONGODB_CAMPAIGN_COLLECTION || 'wati_campaign',
   },
 };
 

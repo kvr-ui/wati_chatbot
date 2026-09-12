@@ -179,13 +179,34 @@ Browser testing alone does not validate production delivery or human handover op
 | POST | `/simulate` | `{ "text": "...", "provider": "claude" }` → the reply, without sending anything to WhatsApp |
 | GET | `/match?text=...` | Which trigger a phrase hits |
 | POST | `/reindex` | Re-embed the knowledge base after editing files |
-| GET | `/health` | Index size, trigger count, active sessions |
+| GET | `/health` | Index size, trigger count, active sessions, allowlist, opt-in and campaign-group counts |
 
 ## How it behaves
 
 - **24-hour window.** Free-form replies only work within 24h of the customer's last message —
   that is a WhatsApp rule, not a bot limitation. To start a conversation, use an approved
   template via `sendTemplateMessage()` in [src/wati.js](src/wati.js).
+- **Who the bot answers.** While `WHATSAPP_ALLOWED_NUMBERS` is set, the bot replies only to
+  those numbers and ignores every other contact. Any other lead can unlock the bot *for its
+  own number only* by sending the campaign phrase in `WHATSAPP_UNLOCK_PHRASE`
+  (default `jan 2027, january 2027`, matched anywhere in the message, ignoring case and
+  punctuation). That message is answered and the number is saved to the `wati_optins`
+  collection, so the bot keeps talking to that one lead after a restart — and still to nobody
+  else. Remove its document from `wati_optins` and restart to lock a number again; set
+  `WHATSAPP_UNLOCK_PHRASE=` empty to disable opt-in entirely. With `WHATSAPP_ALLOWED_NUMBERS`
+  blank the bot answers everyone and the phrase is irrelevant.
+- **The January 2027 campaign script.** A lead arriving from the ad is asked one qualifying
+  question before anything else: *"Which group are you planning to take the exam in January
+  2027?"*, with the four options numbered (Group 1 / Group 2 / Both Groups / Unit 2D). Their
+  first message is **not** answered otherwise — the question comes alone. The reply is matched
+  loosely (`2`, `grp-2`, `group two`, `both`, `unit 2d` all work); the group is echoed back
+  inside the offerings message and saved to the `wati_campaign` collection, so a restart or an
+  expired session cannot lose it. An answer that names no group is re-asked once, and after
+  that the lead is let through to normal answering rather than stonewalled. Nobody is asked
+  twice: once a lead has answered, the ad phrase is just another message. The wording lives at
+  the top of [src/campaign.js](src/campaign.js) — edit `GROUPS`, `GROUP_QUESTION` and
+  `groupPitch` there. Note the "less than 3.5 months" line is fixed text and will need editing
+  as the exam gets closer. `/health` reports the per-group counts under `campaignGroups`.
 - **Human handover.** After a `handover` trigger the bot stays silent for
   `HANDOVER_PAUSE_MINUTES` (default 60) so your agent can take the chat. The customer typing
   `bot` brings it back.
@@ -218,4 +239,5 @@ Browser testing alone does not validate production delivery or human handover op
 | [src/providers/openai.js](src/providers/openai.js) | OpenAI chat completion call |
 | [src/wati.js](src/wati.js) | WATI send API (session, template, buttons) |
 | [src/sessions.js](src/sessions.js) | Per-contact memory, handover pause, de-dup |
+| [src/optin.js](src/optin.js) | Campaign-phrase opt-in: which non-allowlisted leads get replies |
 # wati_chatbot

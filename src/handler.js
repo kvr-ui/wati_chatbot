@@ -3,6 +3,7 @@ import { matchTrigger } from './keywords.js';
 import { answer, renderTemplate } from './ai.js';
 import { getSession, remember, pauseForHandover, isPaused, resume } from './sessions.js';
 import { logTurn } from './conversations.js';
+import { campaignStep } from './campaign.js';
 
 /**
  * Core bot brain. Transport-agnostic so both the WATI webhook and the
@@ -52,6 +53,16 @@ async function route({ waId, name, text, type = 'text', provider }) {
       return { replies: [reply], meta: { trigger: trigger.id, reason: 'resumed' } };
     }
     return { replies: [], meta: { reason: 'paused_for_agent' } };
+  }
+
+  // The January 2027 campaign script. It runs ahead of keyword matching so a
+  // bare "2" is read as the group the lead picked and not as some other
+  // trigger; it returns null for every message that is not part of the script.
+  const campaign = await campaignStep({ waId, name: session.name, text });
+  if (campaign) {
+    remember(session, 'user', text);
+    remember(session, 'assistant', campaign.replies.join('\n'));
+    return campaign;
   }
 
   if (trigger) {

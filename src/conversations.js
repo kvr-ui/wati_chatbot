@@ -21,6 +21,7 @@ export const SIGNALS = {
   payment_link: { points: 30, label: 'Asked for a payment link' },
   payment_status: { points: 25, label: 'Payment already in progress' },
   admission: { points: 20, label: 'Asked how to join' },
+  campaign_group: { points: 12, label: 'Named their exam group' },
   human_handover: { points: 18, label: 'Asked for a human agent' },
   fees: { points: 14, label: 'Asked about fees' },
   kit: { points: 10, label: 'Asked about the kit' },
