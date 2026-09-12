@@ -55,6 +55,22 @@ test('playground loads without WATI credentials; no secrets in configuration', a
   assert.equal(webhook.status, 503);
 });
 
+test('a quoted reply to the campaign image is read as text, not turned away as media', async () => {
+  // WhatsApp lets a lead answer the JAN 2027 ad by quoting it; WATI then stamps
+  // the message with a type of its own even though real words came through.
+  const { parseWatiEvent } = await import('../src/app.js');
+  const quoted = parseWatiEvent({
+    eventType: 'message', owner: false, waId: '12345', senderName: 'Lead',
+    type: 'quoted', text: 'JAN 2027',
+  });
+  assert.equal(quoted.type, 'text');
+  assert.equal(quoted.text, 'JAN 2027');
+
+  // A photo with no caption still has nothing to answer.
+  const photo = parseWatiEvent({ eventType: 'message', owner: false, waId: '12345', type: 'image' });
+  assert.equal(photo.type, 'image');
+});
+
 test('questions send actual retrieved facts to OpenAI and preserve follow-up memory', async () => {
   calls = [];
   const first = await post('What are the fees for one group?', 'conversation');

@@ -30,7 +30,7 @@ const log = (...args) => console.log(new Date().toISOString(), ...args);
 /* --------------------------- webhook payload --------------------------- */
 
 /** Normalises a WATI webhook body into { waId, name, text, type, messageId }. */
-function parseWatiEvent(body = {}) {
+export function parseWatiEvent(body = {}) {
   const eventType = body.eventType || body.type;
   const isIncoming = body.owner === false || body.owner === 'false';
 
@@ -52,7 +52,11 @@ function parseWatiEvent(body = {}) {
     waId: body.waId || body.whatsappNumber,
     name: body.senderName || body.name,
     text: String(text).trim(),
-    type: body.type === 'text' || body.listReply || body.replyButtonReply ? 'text' : body.type,
+    // Anything that carried words is answerable, whatever WATI called it: a
+    // quoted reply to the campaign image arrives with a non-"text" type but
+    // real text, and used to be turned away as if it were a photo.
+    type: String(text).trim() ? 'text' : body.type,
+    rawType: body.type,
     messageId: body.id || body.whatsappMessageId,
   };
 }
@@ -87,7 +91,8 @@ async function admit(event) {
 
 async function processEvent(event) {
   const { replies, meta } = await handleMessage(event);
-  log(`<- ${event.waId} "${event.text}"`, JSON.stringify(meta));
+  const kind = event.rawType && event.rawType !== 'text' ? ` [${event.rawType}]` : '';
+  log(`<- ${event.waId}${kind} "${event.text}"`, JSON.stringify(meta));
 
   for (const reply of replies) {
     await sendSessionMessage(event.waId, reply);
