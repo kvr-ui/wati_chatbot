@@ -1,14 +1,15 @@
 # Production database guide
 
-Conversations and lead scores live in **MongoDB**, matching the other FOCAS
-projects. Tester feedback stays in a small local SQLite file.
+Everything the bot stores — conversations, lead scores, and tester feedback —
+lives in **MongoDB**, matching the other FOCAS projects. There is no local
+database file anymore.
 
-| Store | Contains | Replaceable? |
+| Collection | Contains | Replaceable? |
 |---|---|---|
 | `focas.wati_messages` | Every customer question and bot answer | **No** — the irreplaceable one |
 | `focas.wati_leads` | Lead scores, stages, signals | Yes — derived, rebuild with rescore |
-| `data/feedback.sqlite` | Internal tester reviews | Mostly |
-| `data/embeddings.json` | Knowledge-base vectors | Yes — `npm run ingest` rebuilds it |
+| `focas.wati_feedback` | Internal tester reviews | Mostly |
+| `data/embeddings.json` | Knowledge-base vectors (local file, unrelated to Mongo) | Yes — `npm run ingest` rebuilds it |
 
 `wati_messages` holds **customer personal data**: phone numbers, names and the
 full text of what people said. Never expose the database to the internet, and
@@ -21,6 +22,7 @@ MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB_NAME=focas
 MONGODB_MESSAGES_COLLECTION=wati_messages
 MONGODB_LEADS_COLLECTION=wati_leads
+MONGODB_FEEDBACK_COLLECTION=wati_feedback
 ```
 
 Collections are domain-prefixed so they sit alongside `vsl_leads` and
@@ -42,7 +44,8 @@ scores, and never delete from `wati_messages`.
 
 The bot **keeps answering customers**. Logging failures are swallowed
 (`logTurn` catches), so a database outage costs you log lines, not sales.
-The leads dashboard returns 503 and `/health` reports the connection error.
+The leads and feedback endpoints return 503 and `/health` reports the
+connection error.
 
 That is deliberate: the reply matters more than the record of it.
 
@@ -54,9 +57,8 @@ BACKUP_KEEP_DAYS=30 npm run backup
 BACKUP_DIR=/mnt/backups npm run backup
 ```
 
-Produces one gzipped `mongodump` archive per collection, plus a SQLite
-snapshot of feedback taken with `VACUUM INTO` (copying a live SQLite file can
-capture a half-written transaction and misses the `-wal` file).
+Produces one gzipped `mongodump` archive per collection (`wati_messages`,
+`wati_leads`, `wati_feedback`).
 
 Schedule with cron — `crontab -e`:
 
@@ -87,7 +89,8 @@ Expect a row count close to production and readable message text. Restoring
 into `restore_verify` means production is never touched.
 
 > Note: `mongodump` honours only the **last** `--collection` flag if you pass
-> several — which is why the script dumps one archive per collection.
+> several in one call — which is why the script dumps one archive per
+> collection instead of one combined dump.
 
 ### Restoring for real
 
@@ -95,6 +98,7 @@ into `restore_verify` means production is never touched.
 sudo systemctl stop focas-bot
 mongorestore --uri="$MONGODB_URI" --archive=backups/wati_messages-<stamp>.archive.gz --gzip --drop
 mongorestore --uri="$MONGODB_URI" --archive=backups/wati_leads-<stamp>.archive.gz --gzip --drop
+mongorestore --uri="$MONGODB_URI" --archive=backups/wati_feedback-<stamp>.archive.gz --gzip --drop
 sudo systemctl start focas-bot
 ```
 
@@ -114,7 +118,7 @@ Measured at **~1.4 KB per exchange** (question + answer + metadata):
 | 2,000 exchanges/day | ~1 GB |
 
 Backups multiply this by the number of retained snapshots. Neither is a
-concern on a normal VPS.
+concern on a normal VPS or a shared Atlas cluster.
 
 ## Keep the bot running
 
@@ -139,6 +143,9 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 ```
 
+If MongoDB runs on a different host (e.g. Atlas), drop the
+`After=/Wants=mongod.service` lines — they only make sense for a local mongod.
+
 ```bash
 sudo systemctl enable --now focas-bot
 journalctl -u focas-bot -f        # live logs
@@ -153,13 +160,14 @@ Caddy and a real TLS certificate, then set the WATI webhook once.
 Keep `WEBHOOK_VERIFY_TOKEN` set — it is what stops anyone who finds the URL
 from injecting fake messages.
 
-## Migrating from the old SQLite store
+## Moving to a hosted MongoDB (Atlas)
 
-Conversations recorded before the Mongo switch:
+Nothing in the code changes — only `MONGODB_URI`:
 
 ```bash
-npm run migrate:mongo
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/
 ```
 
-Safe to re-run — messages are matched on `(waId, createdAt, role, text)`, so a
-second run imports nothing rather than duplicating history.
+Atlas adds managed off-box backups, which a local mongod does not have. Worth
+doing once real customer history accumulates and the local nightly dump is no
+longer enough on its own.

@@ -233,25 +233,35 @@ app.get('/api/export/training.jsonl', async (req, res) => {
   }
 });
 
-app.get('/api/feedback', (req, res) => {
+app.get('/api/feedback', async (req, res) => {
   const requestedLimit = Number(req.query.limit ?? 50);
   const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
-  res.json({ reviews: listFeedback(limit) });
+  try {
+    res.json({ reviews: await listFeedback(limit) });
+  } catch (err) {
+    console.error('feedback query failed:', err.message);
+    dbError(res);
+  }
 });
 
-app.post('/api/feedback', (req, res) => {
+app.post('/api/feedback', async (req, res) => {
   const { sessionId, reviewer = 'Test team', content } = req.body || {};
   if (!validSession(sessionId) || typeof reviewer !== 'string' || !reviewer.trim() || reviewer.length > 100 ||
       typeof content !== 'string' || !content.trim() || content.length > 4000) {
     return res.status(400).json({ error: 'Add a review of 1–4,000 characters and a valid tester name.' });
   }
 
-  const review = saveFeedback({
-    sessionId,
-    reviewer: reviewer.trim(),
-    content: content.trim(),
-  });
-  res.status(201).json({ review });
+  try {
+    const review = await saveFeedback({
+      sessionId,
+      reviewer: reviewer.trim(),
+      content: content.trim(),
+    });
+    res.status(201).json({ review });
+  } catch (err) {
+    console.error('feedback save failed:', err.message);
+    dbError(res);
+  }
 });
 
 app.get('/api/knowledge', (_req, res) => {

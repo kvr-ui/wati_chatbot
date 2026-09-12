@@ -94,19 +94,15 @@ export const config = {
     chunkOverlap: 150,
   },
 
-  feedback: {
-    // Kept on this machine so testers can share notes without any hosted database.
-    dbFile: process.env.FEEDBACK_DB_FILE || path.join(root, 'data', 'feedback.sqlite'),
-  },
-
-  // Every question and answer, for lead scoring and future model training.
-  // Collections are domain-prefixed to match the other FOCAS projects sharing
-  // this database (vsl_leads, bigin_contacts).
+  // Every question and answer, tester feedback, and lead scores. Collections
+  // are domain-prefixed to match the other FOCAS projects sharing this
+  // database (vsl_leads, bigin_contacts).
   mongo: {
     uri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017',
     dbName: process.env.MONGODB_DB_NAME || 'focas',
     messages: process.env.MONGODB_MESSAGES_COLLECTION || 'wati_messages',
     leads: process.env.MONGODB_LEADS_COLLECTION || 'wati_leads',
+    feedback: process.env.MONGODB_FEEDBACK_COLLECTION || 'wati_feedback',
   },
 };
 

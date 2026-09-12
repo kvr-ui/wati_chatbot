@@ -2,17 +2,15 @@ import { readdirSync, mkdirSync, statSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { config } from '../src/config.js';
-import { openDatabase } from '../src/db.js';
 
 /**
- * Snapshots both stores while the bot keeps running:
+ * Snapshots every collection this bot owns from MongoDB, one gzipped
+ * mongodump archive per collection, into backups/.
  *
- *   - conversations and lead scores  -> mongodump (gzipped archive)
- *   - tester feedback (SQLite)       -> VACUUM INTO
- *
- * SQLite is snapshotted with VACUUM INTO rather than a file copy because
- * copying a live database can capture a half-written transaction and misses
- * the -wal file, producing a backup that only fails when you need it.
+ * One archive per collection rather than one dump of the whole database:
+ * mongodump only honours the LAST --collection flag if you pass several
+ * (silently skipping the rest), and the database also holds other FOCAS
+ * projects' collections that this bot should not be backing up.
  *
  *   npm run backup
  *   BACKUP_KEEP_DAYS=30 BACKUP_DIR=/mnt/backups npm run backup
@@ -28,13 +26,7 @@ const size = (f) => `${(statSync(f).size / 1024).toFixed(0)} KB`;
 
 let failed = false;
 
-/* ------------------------- conversations (Mongo) ------------------------ */
-
-// One archive per collection: mongodump honours only the LAST --collection flag
-// if you pass several, which would silently skip the messages entirely. The
-// database also holds other projects' collections, so dumping the whole db
-// would back up data this bot does not own.
-for (const collection of [config.mongo.messages, config.mongo.leads]) {
+for (const collection of [config.mongo.messages, config.mongo.leads, config.mongo.feedback]) {
   const archive = path.join(backupDir, `${collection}-${stamp}.archive.gz`);
   try {
     execFileSync('mongodump', [
@@ -53,26 +45,13 @@ for (const collection of [config.mongo.messages, config.mongo.leads]) {
   }
 }
 
-/* --------------------------- feedback (SQLite) -------------------------- */
-
-const feedbackOut = path.join(backupDir, `feedback-${stamp}.sqlite`);
-try {
-  const db = openDatabase(config.feedback.dbFile);
-  db.exec(`VACUUM INTO '${feedbackOut.replace(/'/g, "''")}'`);
-  db.close();
-  console.log(`[ok]   feedback      -> ${feedbackOut} (${size(feedbackOut)})`);
-} catch (err) {
-  failed = true;
-  console.error(`[fail] feedback: ${err.message}`);
-}
-
 /* ------------------------------ retention ------------------------------- */
 
 const cutoff = Date.now() - keepDays * 86_400_000;
 let removed = 0;
 
 for (const entry of readdirSync(backupDir)) {
-  if (!/-\d{4}-\d{2}-\d{2}T[\d-]+\.(sqlite|archive\.gz)$/.test(entry)) continue;
+  if (!/-\d{4}-\d{2}-\d{2}T[\d-]+\.archive\.gz$/.test(entry)) continue;
   const full = path.join(backupDir, entry);
   if (statSync(full).mtimeMs < cutoff) {
     rmSync(full, { force: true });

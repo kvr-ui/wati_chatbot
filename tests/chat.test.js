@@ -26,7 +26,7 @@ before(async () => {
     if (fail) { res.writeHead(401); res.end(JSON.stringify({error:{message:'secret-test-token must never appear in browser',type:'authentication_error'}})); return; }
     res.end(JSON.stringify({ choices: [{ message: { content: 'One group is ₹30,000 and both groups are ₹55,000, including the kit.' } }], model: 'gpt-4o-mini-test', usage: {} }));
   }));
-  Object.assign(process.env, { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', FEEDBACK_DB_FILE: ':memory:', MONGODB_DB_NAME: TEST_DB, ANTHROPIC_API_KEY: '', WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
+  Object.assign(process.env, { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', MONGODB_DB_NAME: TEST_DB, ANTHROPIC_API_KEY: '', WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
   ({ config } = await import('../src/config.js'));
   ({ getSession } = await import('../src/sessions.js'));
   ({ closeMongo, getDb } = await import('../src/mongo.js'));

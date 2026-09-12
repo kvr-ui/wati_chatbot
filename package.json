@@ -14,7 +14,6 @@
     "check:ai": "node scripts/check-ai.js",
     "check:gateway": "node scripts/check-gateway.js",
     "backup": "node scripts/backup-db.js",
-    "migrate:mongo": "node scripts/migrate-sqlite-to-mongo.js",
     "test": "node --test"
   },
   "engines": {

@@ -1,32 +1,23 @@
-import { config } from './config.js';
-import { openDatabase } from './db.js';
+import { feedback as feedbackCollection } from './mongo.js';
 
-const db = openDatabase(config.feedback.dbFile);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS feedback (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    reviewer TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-const row = (review) => ({
-  id: Number(review.id),
-  sessionId: review.session_id,
-  reviewer: review.reviewer,
-  content: review.content,
-  createdAt: review.created_at,
+const row = (doc) => ({
+  id: String(doc._id),
+  sessionId: doc.sessionId,
+  reviewer: doc.reviewer,
+  content: doc.content,
+  createdAt: doc.createdAt,
 });
 
-export function saveFeedback({ sessionId, reviewer, content }) {
-  const result = db.prepare(
-    'INSERT INTO feedback (session_id, reviewer, content) VALUES (?, ?, ?)'
-  ).run(sessionId, reviewer, content);
-  return row(db.prepare('SELECT * FROM feedback WHERE id = ?').get(result.lastInsertRowid));
+export async function saveFeedback({ sessionId, reviewer, content }) {
+  const createdAt = new Date();
+  const { insertedId } = await (await feedbackCollection()).insertOne({
+    sessionId, reviewer, content, createdAt,
+  });
+  return row({ _id: insertedId, sessionId, reviewer, content, createdAt });
 }
 
-export function listFeedback(limit = 50) {
-  return db.prepare('SELECT * FROM feedback ORDER BY id DESC LIMIT ?').all(limit).map(row);
+export async function listFeedback(limit = 50) {
+  const docs = await (await feedbackCollection())
+    .find({}).sort({ _id: -1 }).limit(limit).toArray();
+  return docs.map(row);
 }
