@@ -1,0 +1,61 @@
+# One service. The webhook, the simulator and the leads dashboard are a single
+# Express process, and the in-memory session store (SESSION_TTL_MINUTES) is per
+# process — so do NOT `docker compose up --scale bot=2`: a second replica would
+# hold its own half of every conversation and the bot would forget mid-thread.
+
+services:
+  bot:
+    build: .
+    image: wati-chatbot:latest
+    container_name: wati-chatbot
+    restart: unless-stopped
+
+    # Reads WATI, Claude, OpenAI and Mongo credentials from the same .env the
+    # app uses outside Docker, so there is one place to change a credential.
+    #
+    # WHATSAPP_ALLOWED_NUMBERS lives in there and is the only thing standing
+    # between this container and every contact in a live WATI account. Check it
+    # before every `up -d`.
+    env_file: .env
+
+    environment:
+      # Fixed here (and in the Dockerfile) rather than in .env: properties of
+      # running inside this container, not of the deployment.
+      HOST: 0.0.0.0
+      PORT: 3000
+      NODE_ENV: production
+
+    ports:
+      # 3005 on the host because 3000 is focas-app, 3060 is wacrm and 3100 is
+      # focas-website.
+      #
+      # Bound to localhost: the app speaks plain HTTP and has no authentication
+      # of any kind, while WATI needs a public HTTPS URL. nginx terminates TLS
+      # in front of it and publishes ONLY /webhook/wati — see
+      # /etc/nginx/sites-available/chatbot.focasedu.online. Publishing 3005
+      # straight to the internet would put the leads dashboard, the customer
+      # CSV export and an open /api/chat on the open web.
+      - "127.0.0.1:3005:3000"
+
+    volumes:
+      # The embeddings cache, so a redeploy does not re-embed the whole
+      # knowledge base at OpenAI's prices. Safe to delete: POST /reindex
+      # rebuilds it.
+      - chatbot-data:/app/data
+
+    # Node is PID 1 here; init reaps anything it spawns and makes signals
+    # behave the way you expect.
+    init: true
+
+    # A webhook payload is a few KB and the KB index is small; the ceiling is
+    # here so a runaway embedding job cannot take the host down with it.
+    mem_limit: 512m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  chatbot-data:
