@@ -1,0 +1,27 @@
+{
+  "name": "wati-chat-bot",
+  "version": "1.0.0",
+  "description": "WATI WhatsApp chatbot with keyword triggers and OpenAI knowledge-base answers",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "ingest": "node scripts/ingest.js",
+    "check:kb": "node scripts/check-kb.js",
+    "chat": "node scripts/chat.js",
+    "check:wati": "node scripts/check-wati.js",
+    "check:ai": "node scripts/check-ai.js",
+    "check:gateway": "node scripts/check-gateway.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "openai": "^4.67.3"
+  }
+}

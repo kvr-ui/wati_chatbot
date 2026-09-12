@@ -1,0 +1,483 @@
+{
+  "settings": {
+    "_comment": "Edited live - the bot reloads this file automatically, no restart needed.",
+    "_matchTypes": "exact | starts_with | contains | regex",
+    "_actions": "reply (send the text below) | ai (answer from the knowledge base) | handover (pause bot for a human) | resume (un-pause the bot)"
+  },
+  "triggers": [
+    {
+      "id": "greeting",
+      "match": "exact",
+      "keywords": [
+        "hi",
+        "hii",
+        "hiii",
+        "hey",
+        "hey there",
+        "hello",
+        "helo",
+        "hlo",
+        "hallo",
+        "start",
+        "namaste",
+        "namaskar",
+        "vanakkam",
+        "hi sir",
+        "hi mam",
+        "hi maam",
+        "hello sir",
+        "hello mam",
+        "hi there",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "gm",
+        "नमस्ते",
+        "नमस्कार",
+        "हाय",
+        "हैलो",
+        "வணக்கம்",
+        "நமஸ்காரம்",
+        "ஹாய்"
+      ],
+      "action": "reply",
+      "reply": "Hello {{name}}! 👋 I'm {{bot}}.\n\nI can help you with:\n1. Our Fastrack Classes\n2. Fees and payment\n3. The Last Attempt Kit\n4. Class timings and slots\n\nJust type your question, or send *menu* anytime."
+    },
+    {
+      "id": "menu",
+      "match": "exact",
+      "keywords": [
+        "menu",
+        "options",
+        "help",
+        "main menu"
+      ],
+      "action": "reply",
+      "reply": "*How can I help?*\n\n- Type *classes* to hear about our Fastrack Classes\n- Type *fees* for pricing\n- Type *kit* for the Last Attempt Kit\n- Type *timings* for the class slots\n- Type *brochure* to get our brochure\n- Type *agent* to talk to a human"
+    },
+    {
+      "id": "menu_1",
+      "match": "exact",
+      "keywords": [
+        "1",
+        "1.",
+        "one"
+      ],
+      "action": "ai",
+      "kbFilter": "course",
+      "prompt": "The user picked option 1 from our menu: our Fastrack Classes. Answer on that topic only."
+    },
+    {
+      "id": "menu_2",
+      "match": "exact",
+      "keywords": [
+        "2",
+        "2.",
+        "two"
+      ],
+      "action": "ai",
+      "kbFilter": "fee",
+      "prompt": "The user picked option 2 from our menu: fees and payment. Answer on that topic only."
+    },
+    {
+      "id": "menu_3",
+      "match": "exact",
+      "keywords": [
+        "3",
+        "3.",
+        "three"
+      ],
+      "action": "ai",
+      "kbFilter": "kit",
+      "prompt": "The user picked option 3 from our menu: the Last Attempt Kit. Answer on that topic only."
+    },
+    {
+      "id": "menu_4",
+      "match": "exact",
+      "keywords": [
+        "4",
+        "4.",
+        "four"
+      ],
+      "action": "ai",
+      "kbFilter": "timing",
+      "prompt": "The user picked option 4 from our menu: class timings and slots. Answer on that topic only."
+    },
+    {
+      "id": "acknowledgement",
+      "match": "exact",
+      "keywords": [
+        "hmm",
+        "hm",
+        "hmmm",
+        "k",
+        "kk",
+        "cool",
+        "nice",
+        "achha",
+        "acha",
+        "oh",
+        "ohh",
+        "okie",
+        "great"
+      ],
+      "action": "reply",
+      "reply": "Sure {{name}}! 😊 Anything you’d like to know about our classes, fees, timings or the Last Attempt Kit?"
+    },
+    {
+      "id": "payment_status",
+      "match": "regex",
+      "keywords": [
+        "(i have|i\\'ve|already|maine) paid",
+        "payment (is )?(done|successful|success|complete|completed|ho gaya|kar diya)",
+        "paid the (fee|fees|amount|money)",
+        "(transferred|sent) (the |you )?(money|amount|fee|fees)",
+        "transaction (id|number)",
+        "\\butr\\b",
+        "screenshot",
+        "receipt",
+        "payment (failed|fail|declined|not working|stuck|issue|error)",
+        "(money|amount) (deducted|debited)",
+        "(failed|declined) transaction",
+        "refund"
+      ],
+      "action": "ai",
+      "kbFilter": "payment",
+      "prompt": "The user is reporting a payment they already attempted. NEVER confirm that a payment was received or verified, that they are enrolled, or that access is now active - we cannot see payments. NEVER promise a refund or a retry link. Acknowledge and hand it to our team."
+    },
+    {
+      "id": "payment_link",
+      "match": "contains",
+      "priority": 30,
+      "keywords": [
+        "payment",
+        "payment link",
+        "payment details",
+        "pay now",
+        "how to pay",
+        "how do i pay",
+        "where to pay",
+        "where do i pay",
+        "ready to pay",
+        "want to pay",
+        "qr",
+        "qr code",
+        "upi",
+        "upi id",
+        "gpay",
+        "google pay",
+        "phonepe",
+        "paytm",
+        "bank details",
+        "account number",
+        "send link",
+        "link bhejo",
+        "payment kaise",
+        "kaise pay",
+        "paisa",
+        "paise",
+        "भुगतान",
+        "पेमेंट",
+        "क्यूआर",
+        "பணம்",
+        "கட்டணம் செலுத்த"
+      ],
+      "action": "ai",
+      "kbFilter": "payment",
+      "prompt": "The user is asking how to pay. NEVER share, generate or invent a payment link, QR code, UPI id or bank detail, and NEVER say we do not have one or cannot process payments. Send the payment redirect message from the knowledge base."
+    },
+    {
+      "id": "brochure",
+      "match": "contains",
+      "priority": 30,
+      "keywords": [
+        "brochure",
+        "broucher",
+        "brochre",
+        "catalogue",
+        "catalog",
+        "pdf",
+        "send brochure",
+        "share brochure",
+        "details pdf",
+        "brochur",
+        "broshure",
+        "brocher",
+        "ब्रोशर",
+        "विवरण",
+        "ப்ரோஷர்"
+      ],
+      "action": "ai",
+      "kbFilter": "brochure",
+      "prompt": "The user is asking for the brochure. NEVER say we do not have it or cannot share it. Send the brochure request message from the knowledge base."
+    },
+    {
+      "id": "objections",
+      "match": "regex",
+      "keywords": [
+        "after (my |the |your )?(result|results|exam|exams|attempt)",
+        "next attempt",
+        "(let me|lemme|will|need to|gotta) think",
+        "(ask|tell|talk to|discuss with|check with) (my |the )?(parent|parents|papa|dad|father|mom|mother|family)",
+        "already (studying|joined|enrolled|taking)",
+        "(other|another|different) (coaching|institute|class|classes|teacher|tutor)",
+        "(self study|self-study|study myself|study on my own|do it myself)",
+        "already have (notes|material|materials|books|everything|test series)",
+        "(only|just) (need |want )?(material|materials|notes|books|kit)",
+        "(dont|do not|don\\'t) need (classes|class|coaching|tuition)",
+        "too (expensive|costly|much|high)",
+        "(cant|can not|cannot|can\\'t) afford"
+      ],
+      "action": "ai",
+      "kbFilter": "objection",
+      "prompt": "The user raised a sales objection. Use the matching objection reply from the knowledge base. Stay calm and guiding, never pushy, and never offer a discount - there are none."
+    },
+    {
+      "id": "courses",
+      "match": "contains",
+      "keywords": [
+        "course",
+        "courses",
+        "class",
+        "classes",
+        "programme",
+        "program",
+        "training",
+        "syllabus",
+        "curriculum",
+        "subjects",
+        "fastrack",
+        "tutor",
+        "mentorship",
+        "clas",
+        "classe",
+        "klass",
+        "padhai",
+        "कक्षा",
+        "क्लास",
+        "कोर्स",
+        "पढ़ाई",
+        "வகுப்பு",
+        "படிப்பு"
+      ],
+      "action": "ai",
+      "kbFilter": "course",
+      "prompt": "The user is asking about courses. List the relevant course names briefly and invite them to ask about any one of them."
+    },
+    {
+      "id": "fees",
+      "match": "contains",
+      "keywords": [
+        "fee",
+        "fees",
+        "price",
+        "pricing",
+        "cost",
+        "charges",
+        "how much",
+        "emi",
+        "installment",
+        "discount",
+        "fes",
+        "fis",
+        "fee structure",
+        "fees structure",
+        "feez",
+        "kitna",
+        "kitne",
+        "kitni",
+        "kimat",
+        "फीस",
+        "शुल्क",
+        "कीमत",
+        "कितना",
+        "कितने",
+        "कितनी",
+        "दाम",
+        "கட்டணம்",
+        "விலை",
+        "என்ன விலை"
+      ],
+      "action": "ai",
+      "kbFilter": "fee",
+      "prompt": "The user is asking about fees. Give exact amounts only if they appear in the knowledge base. Never estimate or guess a price."
+    },
+    {
+      "id": "kit",
+      "match": "contains",
+      "keywords": [
+        "kit",
+        "last attempt kit",
+        "question bank",
+        "mcq",
+        "planner",
+        "deep focas",
+        "community",
+        "kitt",
+        "किट",
+        "प्रश्न बैंक",
+        "கிட்"
+      ],
+      "action": "ai",
+      "kbFilter": "kit",
+      "prompt": "The user is asking about the Last Attempt Kit. Describe what is inside it. Quote kit pricing only if they asked for the kit separately."
+    },
+    {
+      "id": "admission",
+      "match": "contains",
+      "keywords": [
+        "admission",
+        "enroll",
+        "enrol",
+        "join",
+        "register",
+        "registration",
+        "apply",
+        "eligibility",
+        "documents"
+      ],
+      "action": "ai",
+      "kbFilter": "admission"
+    },
+    {
+      "id": "timings",
+      "match": "contains",
+      "keywords": [
+        "timing",
+        "timings",
+        "schedule",
+        "batch",
+        "batches",
+        "slot",
+        "slots",
+        "duration",
+        "class time",
+        "weekend",
+        "working hours",
+        "open",
+        "kitne baje",
+        "kab",
+        "kab hai",
+        "samay",
+        "time table",
+        "timetable",
+        "समय",
+        "टाइम",
+        "कब",
+        "बैच",
+        "நேரம்",
+        "எப்போது"
+      ],
+      "action": "ai",
+      "kbFilter": "timing"
+    },
+    {
+      "id": "location",
+      "match": "contains",
+      "keywords": [
+        "location",
+        "address",
+        "where are you",
+        "branch",
+        "campus",
+        "directions",
+        "map"
+      ],
+      "action": "ai",
+      "kbFilter": "location"
+    },
+    {
+      "id": "contact",
+      "match": "contains",
+      "keywords": [
+        "contact",
+        "phone number",
+        "email",
+        "call you",
+        "website"
+      ],
+      "action": "ai",
+      "kbFilter": "contact"
+    },
+    {
+      "id": "placement",
+      "match": "contains",
+      "keywords": [
+        "placement",
+        "job",
+        "jobs",
+        "career",
+        "internship",
+        "hiring",
+        "salary"
+      ],
+      "action": "ai",
+      "kbFilter": "placement"
+    },
+    {
+      "id": "human_handover",
+      "match": "contains",
+      "keywords": [
+        "agent",
+        "human",
+        "customer care",
+        "executive",
+        "talk to someone",
+        "real person",
+        "counsellor",
+        "counselor"
+      ],
+      "action": "handover",
+      "reply": "Sure {{name}} — I'm connecting you to our team. Someone will reply here shortly. 🙏\n\n(Type *bot* if you'd like to go back to the assistant.)"
+    },
+    {
+      "id": "resume_bot",
+      "match": "exact",
+      "keywords": [
+        "bot",
+        "assistant",
+        "restart bot"
+      ],
+      "action": "resume",
+      "reply": "I'm back! 🤖 What would you like to know?"
+    },
+    {
+      "id": "thanks",
+      "match": "contains",
+      "keywords": [
+        "thanks",
+        "thank you",
+        "thank u",
+        "tq",
+        "nandri",
+        "dhanyavad"
+      ],
+      "action": "reply",
+      "reply": "Happy to help, {{name}}! 😊 Anything else you'd like to know?"
+    },
+    {
+      "id": "bye",
+      "match": "contains",
+      "keywords": [
+        "bye",
+        "goodbye",
+        "see you",
+        "ok bye",
+        "no thanks"
+      ],
+      "action": "reply",
+      "reply": "Thank you for reaching out! Message us anytime. Have a great day 👋"
+    },
+    {
+      "id": "stop",
+      "match": "exact",
+      "keywords": [
+        "stop",
+        "unsubscribe",
+        "opt out"
+      ],
+      "action": "handover",
+      "reply": "Understood — I've stopped automated replies. Our team will follow up if needed."
+    }
+  ]
+}

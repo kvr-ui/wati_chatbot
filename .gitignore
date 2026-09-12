@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/embeddings.json
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+*.log

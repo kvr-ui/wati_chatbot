@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>FOCAS Leads</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/leads.css">
+  <script src="/leads.js" defer></script>
+</head>
+<body>
+  <main class="leads-app">
+    <section class="leads-panel" aria-labelledby="leads-title">
+      <header>
+        <div>
+          <h1 id="leads-title">Leads</h1>
+          <p id="lead-stats">Loading…</p>
+        </div>
+        <a class="link-button" href="/">Test chat</a>
+      </header>
+
+      <div class="toolbar">
+        <label class="sr-only" for="stage-filter">Filter by stage</label>
+        <select id="stage-filter">
+          <option value="">All stages</option>
+          <option value="hot">Hot</option>
+          <option value="warm">Warm</option>
+          <option value="cold">Cold</option>
+        </select>
+
+        <label class="sr-only" for="channel-filter">Filter by channel</label>
+        <select id="channel-filter">
+          <option value="whatsapp">WhatsApp</option>
+          <option value="preview">Test chat</option>
+          <option value="">Both</option>
+        </select>
+
+        <a id="csv-link" class="link-button" href="/api/export/leads.csv?channel=whatsapp">CSV</a>
+        <a id="jsonl-link" class="link-button" href="/api/export/training.jsonl?channel=whatsapp">Training data</a>
+      </div>
+
+      <div id="lead-list" class="lead-list" role="list">
+        <p class="no-reviews">Loading leads…</p>
+      </div>
+    </section>
+
+    <section class="transcript-panel" aria-labelledby="transcript-title">
+      <header>
+        <div>
+          <h2 id="transcript-title">Conversation</h2>
+          <p id="transcript-meta">Select a lead to read the full chat.</p>
+        </div>
+      </header>
+      <div id="signals" class="signals"></div>
+      <div id="transcript" class="conversation">
+        <div class="empty-state">
+          <p>No lead selected.</p>
+          <small>Pick someone on the left to see every question they asked.</small>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

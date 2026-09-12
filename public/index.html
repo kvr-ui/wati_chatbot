@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>FOCAS Chat Test</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <section class="chat-panel" aria-label="Bot chat">
+      <header>
+        <div>
+          <h1>FOCAS Chat Test</h1>
+          <p id="status">Connecting to OpenAI…</p>
+        </div>
+        <button id="new-chat" type="button">New chat</button>
+      </header>
+
+      <section id="conversation" class="conversation" role="log" aria-live="polite" aria-label="Chat messages">
+        <div id="empty-state" class="empty-state">
+          <p>Ask a question to test the bot.</p>
+          <small>Answers use the FOCAS knowledge base.</small>
+        </div>
+      </section>
+
+      <div id="error" class="error" role="alert" hidden></div>
+      <form id="chat-form">
+        <label class="sr-only" for="message">Your question</label>
+        <textarea id="message" rows="1" maxlength="4000" placeholder="Type your question…" required></textarea>
+        <button id="send" type="submit" disabled>Send</button>
+      </form>
+      <p class="hint">Press Enter to send · Shift + Enter for a new line</p>
+    </section>
+
+    <aside class="feedback-panel" aria-labelledby="feedback-title">
+      <header class="feedback-header">
+        <div>
+          <h2 id="feedback-title">Test reviews</h2>
+          <p>Saved on this computer</p>
+        </div>
+      </header>
+      <form id="feedback-form" class="feedback-form">
+        <label for="reviewer">Your name</label>
+        <input id="reviewer" maxlength="100" placeholder="Test team member" autocomplete="name">
+        <label for="review">Review</label>
+        <textarea id="review" rows="4" maxlength="4000" placeholder="What worked, what was wrong, or what should change?" required></textarea>
+        <button id="save-review" type="submit">Save review</button>
+        <p id="review-status" class="review-status" role="status"></p>
+      </form>
+      <section id="reviews" class="reviews" aria-live="polite" aria-label="Saved test reviews">
+        <p class="no-reviews">No reviews saved yet.</p>
+      </section>
+    </aside>
+  </main>
+</body>
+</html>
