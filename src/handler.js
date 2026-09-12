@@ -18,7 +18,7 @@ export async function handleMessage(event) {
   const result = await route(event);
 
   const waId = String(event.waId ?? '');
-  logTurn({
+  await logTurn({
     waId,
     name: event.name,
     channel: waId.startsWith('preview:') ? 'preview' : 'whatsapp',

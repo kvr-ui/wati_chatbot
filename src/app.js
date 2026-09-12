@@ -106,7 +106,9 @@ app.post('/webhook/wati', (req, res) => {
   });
 });
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
+  // Health must still answer when the database is down - that is when it matters.
+  const conversations = await conversationStats().catch((err) => ({ error: err.message }));
   res.json({
     ok: true,
     provider: config.ai.provider,
@@ -117,7 +119,7 @@ app.get('/health', (_req, res) => {
     whatsappAllowedNumbers: [...config.whatsappAllowedNumbers],
     kb: indexStats(),
     triggers: listTriggerIds().length,
-    conversations: conversationStats(),
+    conversations,
     ...sessionStats(),
   });
 });
@@ -168,38 +170,67 @@ app.delete('/api/chat/:sessionId', (req, res) => {
 const STAGES = new Set(['hot', 'warm', 'cold', 'new']);
 const CHANNELS = new Set(['whatsapp', 'preview']);
 
-app.get('/api/leads', (req, res) => {
+/** The database is a separate service now; a query failure must not crash the server. */
+const dbError = (res) => res.status(503).json({ error: 'Lead database is unavailable. Check that MongoDB is running.' });
+
+app.get('/api/leads', async (req, res) => {
   const { channel, stage } = req.query;
   if ((channel && !CHANNELS.has(channel)) || (stage && !STAGES.has(stage))) {
     return res.status(400).json({ error: 'Invalid channel or stage filter.' });
   }
   const requested = Number(req.query.limit ?? 100);
   const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 1000) : 100;
-  res.json({ leads: listLeads({ limit, channel, stage }), stats: conversationStats() });
+  try {
+    const [leads, stats] = await Promise.all([listLeads({ limit, channel, stage }), conversationStats()]);
+    res.json({ leads, stats });
+  } catch (err) {
+    console.error('leads query failed:', err.message);
+    dbError(res);
+  }
 });
 
-app.get('/api/leads/:waId', (req, res) => {
-  const lead = getLead(req.params.waId);
-  if (!lead) return res.status(404).json({ error: 'No conversation recorded for that number.' });
-  res.json({ lead });
+app.get('/api/leads/:waId', async (req, res) => {
+  try {
+    const lead = await getLead(req.params.waId);
+    if (!lead) return res.status(404).json({ error: 'No conversation recorded for that number.' });
+    res.json({ lead });
+  } catch (err) {
+    console.error('lead query failed:', err.message);
+    dbError(res);
+  }
 });
 
-app.post('/api/leads/rescore', (_req, res) => {
-  res.json({ ok: true, leads: rescoreAll() });
+app.post('/api/leads/rescore', async (_req, res) => {
+  try {
+    res.json({ ok: true, leads: await rescoreAll() });
+  } catch (err) {
+    console.error('rescore failed:', err.message);
+    dbError(res);
+  }
 });
 
-app.get('/api/export/leads.csv', (req, res) => {
+app.get('/api/export/leads.csv', async (req, res) => {
   const { channel } = req.query;
   if (channel && !CHANNELS.has(channel)) return res.status(400).json({ error: 'Invalid channel filter.' });
-  res.type('text/csv').attachment('leads.csv').send(exportLeadsCsv({ channel }));
+  try {
+    res.type('text/csv').attachment('leads.csv').send(await exportLeadsCsv({ channel }));
+  } catch (err) {
+    console.error('csv export failed:', err.message);
+    dbError(res);
+  }
 });
 
-app.get('/api/export/training.jsonl', (req, res) => {
+app.get('/api/export/training.jsonl', async (req, res) => {
   const channel = req.query.channel ?? 'whatsapp';
   if (!CHANNELS.has(channel)) return res.status(400).json({ error: 'Invalid channel filter.' });
   const requested = Number(req.query.minTurns ?? 2);
   const minTurns = Number.isInteger(requested) && requested > 0 ? requested : 2;
-  res.type('application/jsonl').attachment('training.jsonl').send(exportTrainingJsonl({ channel, minTurns }));
+  try {
+    res.type('application/jsonl').attachment('training.jsonl').send(await exportTrainingJsonl({ channel, minTurns }));
+  } catch (err) {
+    console.error('training export failed:', err.message);
+    dbError(res);
+  }
 });
 
 app.get('/api/feedback', (req, res) => {

@@ -99,9 +99,14 @@ export const config = {
     dbFile: process.env.FEEDBACK_DB_FILE || path.join(root, 'data', 'feedback.sqlite'),
   },
 
-  conversations: {
-    // Every question and answer, for lead scoring and future model training.
-    dbFile: process.env.CONVERSATIONS_DB_FILE || path.join(root, 'data', 'conversations.sqlite'),
+  // Every question and answer, for lead scoring and future model training.
+  // Collections are domain-prefixed to match the other FOCAS projects sharing
+  // this database (vsl_leads, bigin_contacts).
+  mongo: {
+    uri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017',
+    dbName: process.env.MONGODB_DB_NAME || 'focas',
+    messages: process.env.MONGODB_MESSAGES_COLLECTION || 'wati_messages',
+    leads: process.env.MONGODB_LEADS_COLLECTION || 'wati_leads',
   },
 };
 

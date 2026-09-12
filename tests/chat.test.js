@@ -4,7 +4,9 @@ import http from 'node:http';
 import { once } from 'node:events';
 
 // Import the application only after overriding credentials: tests never use real services.
-let server, mock, base, config, getSession;
+let server, mock, base, config, getSession, closeMongo, getDb;
+// Conversation tests run against a throwaway database, dropped in after().
+const TEST_DB = `wati_bot_test_${process.pid}`;
 let calls = [];
 let fail = false;
 let delay = false;
@@ -24,14 +26,19 @@ before(async () => {
     if (fail) { res.writeHead(401); res.end(JSON.stringify({error:{message:'secret-test-token must never appear in browser',type:'authentication_error'}})); return; }
     res.end(JSON.stringify({ choices: [{ message: { content: 'One group is ₹30,000 and both groups are ₹55,000, including the kit.' } }], model: 'gpt-4o-mini-test', usage: {} }));
   }));
-  Object.assign(process.env, { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', FEEDBACK_DB_FILE: ':memory:', CONVERSATIONS_DB_FILE: ':memory:', ANTHROPIC_API_KEY: '', WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
+  Object.assign(process.env, { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', FEEDBACK_DB_FILE: ':memory:', MONGODB_DB_NAME: TEST_DB, ANTHROPIC_API_KEY: '', WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
   ({ config } = await import('../src/config.js'));
   ({ getSession } = await import('../src/sessions.js'));
+  ({ closeMongo, getDb } = await import('../src/mongo.js'));
   const { app } = await import('../src/app.js');
   server = await listen(app);
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(async () => { await Promise.all([server, mock].filter(Boolean).map((s) => new Promise((resolve) => s.close(resolve)))); });
+after(async () => {
+  try { await (await getDb()).dropDatabase(); } catch {}
+  await closeMongo?.();
+  await Promise.all([server, mock].filter(Boolean).map((s) => new Promise((resolve) => s.close(resolve))));
+});
 
 test('playground loads without WATI credentials; no secrets in configuration', async () => {
   const html = await (await fetch(base)).text();
