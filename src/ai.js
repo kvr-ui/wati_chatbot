@@ -1,9 +1,6 @@
 import { config } from './config.js';
 import { search } from './kb.js';
-import * as openaiProvider from './providers/openai.js';
-import * as claudeProvider from './providers/claude.js';
-
-const PROVIDERS = { openai: openaiProvider, claude: claudeProvider };
+import * as openai from './providers/openai.js';
 
 const BASE_SYSTEM_PROMPT = `You are ${config.bot.name}, the WhatsApp assistant for our team.
 
@@ -38,28 +35,24 @@ function buildContext(chunks) {
   ].join('\n\n');
 }
 
-/** Use the selected provider explicitly; never silently switch models. */
-export function pickProvider(requested) {
-  const wanted = requested || config.ai.provider;
-  const has = { openai: !!config.openai.apiKey, claude: !!config.anthropic.apiKey };
-  if (!PROVIDERS[wanted]) throw new Error('Unknown AI provider. Use openai or claude.');
-  if (!has[wanted]) throw new Error(`Set ${wanted === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} in .env, then restart the server.`);
-  return PROVIDERS[wanted];
+/** OpenAI is the only model provider; say so plainly when its key is missing. */
+export function assertAiConfigured() {
+  if (!config.openai.apiKey) throw new Error('Set OPENAI_API_KEY in .env, then restart the server.');
 }
 
 /**
  * Answers a question using knowledge-base retrieval.
  * history: [{ role: 'user'|'assistant', content }]
  */
-export async function answer(question, { history = [], extraInstruction, kbFilter, provider } = {}) {
-  const impl = pickProvider(provider);
+export async function answer(question, { history = [], extraInstruction, kbFilter } = {}) {
+  assertAiConfigured();
   // Short follow-ups such as "and both groups?" need the previous question's topic.
   const previousQuestion = history.filter((m) => m.role === 'user').at(-1)?.content;
   const refersBack = /^(and\b|also\b|what about\b|how about\b)|\b(it|that|those|they|them)\b/i.test(question);
   const followup = !kbFilter && previousQuestion && refersBack && question.trim().split(/\s+/).length <= 8;
   const chunks = await search(followup ? `${previousQuestion}\n${question}` : question, { filter: kbFilter });
 
-  const res = await impl.complete({
+  const res = await openai.complete({
     system: [BASE_SYSTEM_PROMPT, ...(extraInstruction ? [extraInstruction] : []), buildContext(chunks)],
     history: history.slice(-8),
     question,
@@ -67,7 +60,7 @@ export async function answer(question, { history = [], extraInstruction, kbFilte
 
   return {
     text: res.text || config.bot.fallbackMessage,
-    provider: impl.name,
+    provider: openai.name,
     model: res.model,
     refused: res.refused,
     sources: chunks.map((c) => ({ source: c.source, section: c.section, score: Number(c.score.toFixed(3)) })),

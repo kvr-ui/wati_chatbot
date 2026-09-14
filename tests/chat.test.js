@@ -26,7 +26,7 @@ before(async () => {
     if (fail) { res.writeHead(401); res.end(JSON.stringify({error:{message:'secret-test-token must never appear in browser',type:'authentication_error'}})); return; }
     res.end(JSON.stringify({ choices: [{ message: { content: 'One group is ₹30,000 and both groups are ₹55,000, including the kit.' } }], model: 'gpt-4o-mini-test', usage: {} }));
   }));
-  Object.assign(process.env, { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', MONGODB_DB_NAME: TEST_DB, ANTHROPIC_API_KEY: '', WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
+  Object.assign(process.env, { OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', MONGODB_DB_NAME: TEST_DB, WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
   ({ config } = await import('../src/config.js'));
   ({ getSession } = await import('../src/sessions.js'));
   ({ closeMongo, getDb } = await import('../src/mongo.js'));
@@ -138,14 +138,13 @@ test('invalid requests are rejected before calling the model', async () => {
   const count = calls.length;
   for (const text of ['', '   ', {}, 123, 'x'.repeat(4001)]) assert.equal((await post(text)).status, 400);
   assert.equal((await post('fees', '../invalid')).status, 400);
-  assert.equal((await post('fees', 'test', { provider: 'invalid' })).status, 400);
   const broken = await fetch(`${base}/api/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{bad json' });
   assert.equal(broken.status, 400);
   assert.match(broken.headers.get('content-type'), /json/);
   assert.equal(calls.length, count);
 });
 
-test('errors are redacted, failed turns are not remembered, selected provider never falls back', async () => {
+test('errors are redacted, failed turns are not remembered, a missing OpenAI key is named', async () => {
   fail = true;
   const result = await post('fees', 'failure');
   fail = false;
@@ -155,11 +154,10 @@ test('errors are redacted, failed turns are not remembered, selected provider ne
   assert.deepEqual(getSession('preview:failure').history, []);
   await post('fees', 'failure');
   assert.equal(calls.at(-1).body.messages.filter((m) => m.role === 'user').length, 1);
-  const { pickProvider } = await import('../src/ai.js');
+  const { assertAiConfigured } = await import('../src/ai.js');
   config.openai.apiKey = '';
-  config.anthropic.apiKey = 'test-claude-key';
-  try { assert.throws(() => pickProvider(), /OPENAI_API_KEY/); }
-  finally { config.openai.apiKey = 'test-only'; config.anthropic.apiKey = ''; }
+  try { assert.throws(() => assertAiConfigured(), /OPENAI_API_KEY/); }
+  finally { config.openai.apiKey = 'test-only'; }
 });
 
 test('overlapping requests and reset cannot race the same conversation', async () => {

@@ -6,7 +6,7 @@ import { loadCampaignState } from './campaign.js';
 
 app.listen(config.port, config.host, () => {
   console.log(`${config.bot.name}: http://${config.host}:${config.port}`);
-  console.log(`Provider: ${config.ai.provider}; WhatsApp: ${config.whatsappEnabled ? 'enabled' : 'disabled (test mode)'}`);
+  console.log(`Model: OpenAI ${config.openai.chatModel}; WhatsApp: ${config.whatsappEnabled ? 'enabled' : 'disabled (test mode)'}`);
   if (config.whatsappEnabled) {
     const allowed = [...config.whatsappAllowedNumbers];
     console.log(

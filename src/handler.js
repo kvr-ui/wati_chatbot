@@ -32,7 +32,7 @@ export async function handleMessage(event) {
   return result;
 }
 
-async function route({ waId, name, text, type = 'text', provider }) {
+async function route({ waId, name, text, type = 'text' }) {
   const session = getSession(waId, name);
   const vars = { name: session.name || 'there', bot: config.bot.name };
 
@@ -91,7 +91,6 @@ async function route({ waId, name, text, type = 'text', provider }) {
       history: session.history,
       extraInstruction: trigger.prompt,
       kbFilter: trigger.kbFilters?.length ? trigger.kbFilters : trigger.kbFilter,
-      provider,
     });
     remember(session, 'user', text);
     remember(session, 'assistant', ai.text);
@@ -115,7 +114,7 @@ async function route({ waId, name, text, type = 'text', provider }) {
     return { replies: [reply], meta: { reason: 'static_fallback' } };
   }
 
-  const ai = await answer(text, { history: session.history, provider });
+  const ai = await answer(text, { history: session.history });
   remember(session, 'user', text);
   remember(session, 'assistant', ai.text);
   return {

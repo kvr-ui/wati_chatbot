@@ -145,9 +145,9 @@ app.get('/health', async (_req, res) => {
   const conversations = await conversationStats().catch((err) => ({ error: err.message }));
   res.json({
     ok: true,
-    provider: config.ai.provider,
-    model: config.ai.provider === 'openai' ? config.openai.chatModel : config.anthropic.model,
-    aiConfigured: Boolean(config.ai.provider === 'openai' ? config.openai.apiKey : config.anthropic.apiKey),
+    provider: 'openai',
+    model: config.openai.chatModel,
+    aiConfigured: Boolean(config.openai.apiKey),
     botName: config.bot.name,
     whatsappEnabled: config.whatsappEnabled,
     whatsappAllowedNumbers: [...config.whatsappAllowedNumbers],
@@ -169,24 +169,23 @@ function publicError(err) {
   if (err.status === 401) return 'OpenAI rejected the API key. Update OPENAI_API_KEY in .env and restart the server.';
   if (err.status === 429) return 'OpenAI usage or rate limit reached. Check API billing, or try again shortly.';
   if (err.status === 403 || err.status === 404) return 'The configured AI model is unavailable. Check the model and API access in .env.';
-  if (/^Set (OPENAI|ANTHROPIC)_API_KEY/.test(err.message)) return err.message;
+  if (/^Set OPENAI_API_KEY/.test(err.message)) return err.message;
   return 'The AI service could not answer. Check your connection and model settings, then try again.';
 }
 
 /** Browser sessions are namespaced separately from all WhatsApp contacts. */
 app.post(['/api/chat', '/simulate'], async (req, res) => {
-  const { sessionId, waId, name = 'Tester', text, provider } = req.body || {};
+  const { sessionId, waId, name = 'Tester', text } = req.body || {};
   const id = sessionId ?? waId ?? 'test-user';
   if (!validSession(id) || typeof text !== 'string' || !text.trim() || text.length > 4000 ||
-      typeof name !== 'string' || name.length > 100 ||
-      (provider !== undefined && !['openai', 'claude'].includes(provider))) {
+      typeof name !== 'string' || name.length > 100) {
     return res.status(400).json({ error: 'Send a message of 1–4,000 characters with a valid session ID.' });
   }
   if (busySessions.has(id)) return res.status(409).json({ error: 'Wait for the current reply before sending another message.' });
   busySessions.add(id);
   try {
     const started = Date.now();
-    const result = await handleMessage({ waId: `preview:${id}`, name, text: text.trim(), provider });
+    const result = await handleMessage({ waId: `preview:${id}`, name, text: text.trim() });
     res.json({ ...result, elapsedMs: Date.now() - started });
   } catch (err) {
     res.status(502).json({ error: publicError(err) });

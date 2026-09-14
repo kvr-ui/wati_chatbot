@@ -13,11 +13,6 @@ function normalizeOpenAiBase(url) {
   return /\/v\d+$/i.test(trimmed) ? trimmed : `${trimmed}/v1`;
 }
 
-/** "https://host/v1/messages" -> "https://host" (the SDK adds the path back). */
-function normalizeAnthropicBase(url) {
-  if (!url) return '';
-  return url.trim().replace(/\/+$/, '').replace(/\/v1\/messages$/i, '').replace(/\/v1$/i, '');
-}
 const num = (v, fallback) => (v === undefined || v === '' || Number.isNaN(Number(v)) ? fallback : Number(v));
 
 /** WhatsApp ids are bare digits with a country code; accept "+91 98…" style input too. */
@@ -60,9 +55,7 @@ export const config = {
       .trim(),
   },
 
-  // Which provider answers questions: 'claude' or 'openai'.
-  ai: { provider: (process.env.AI_PROVIDER || 'openai').toLowerCase() },
-
+  // OpenAI answers every question and embeds the knowledge base.
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
     // Set to use an OpenAI-compatible gateway instead of api.openai.com.
@@ -71,19 +64,6 @@ export const config = {
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
   },
 
-  anthropic: {
-    // Accept a standard Anthropic key and the explicit token name used by the
-    // FOCAS gateway. The latter wins so a gateway token can replace an older
-    // console key without ambiguity.
-    apiKey: process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || '',
-    // Custom gateway support. The SDK appends "/v1/messages" itself, so accept a
-    // full messages URL and reduce it to the origin.
-    baseUrl: normalizeAnthropicBase(process.env.ANTHROPIC_BASE_URL),
-    // 'x-api-key' (Anthropic default) or 'bearer' for gateways that want Authorization.
-    authStyle: (process.env.ANTHROPIC_AUTH_STYLE || 'x-api-key').toLowerCase(),
-    model: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
-    effort: process.env.ANTHROPIC_EFFORT || 'low',
-  },
 
   bot: {
     name: process.env.BOT_NAME || 'Assistant',
@@ -124,7 +104,7 @@ export const config = {
 
 export function assertConfig({ requireWati = true } = {}) {
   const missing = [];
-  if (!config.anthropic.apiKey && !config.openai.apiKey) missing.push('ANTHROPIC_API_KEY (or OPENAI_API_KEY)');
+  if (!config.openai.apiKey) missing.push('OPENAI_API_KEY');
   if (requireWati && !config.wati.endpoint) missing.push('WATI_API_ENDPOINT');
   if (requireWati && !config.wati.token) missing.push('WATI_ACCESS_TOKEN');
   if (missing.length) {

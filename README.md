@@ -2,11 +2,11 @@
 
 A WhatsApp bot for [WATI](https://www.wati.io/). Incoming messages hit a webhook, get matched
 against your keyword triggers, and are answered either with a fixed reply or with an AI
-answer (**Claude** or **OpenAI**) grounded in your own knowledge base.
+answer from **OpenAI** grounded in your own knowledge base.
 
 ```
 WhatsApp -> WATI -> POST /webhook/wati -> keyword match ─┬─ static reply
-                                                         ├─ AI answer (knowledge base + Claude/GPT)
+                                                         ├─ AI answer (knowledge base + GPT)     
                                                          └─ handover to a human (bot goes quiet)
                                             reply sent back via WATI sendSessionMessage
 ```
@@ -25,18 +25,16 @@ cp .env.example .env      # then fill in the values
 | `WATI_API_ENDPOINT` | The API endpoint shown there, e.g. `https://live-mt-server.wati.io/123456` |
 | `WATI_ACCESS_TOKEN` | The Access Token / JWT — paste it **without** the leading `Bearer ` |
 
-**AI provider** — `AI_PROVIDER=openai` is the default, using `gpt-4o-mini`. Set `AI_PROVIDER=claude` only to explicitly select Claude.
+**OpenAI** — the only model provider. The bot answers with OpenAI chat models and searches the
+knowledge base with OpenAI embeddings.
 
 | .env key | Notes |
 |---|---|
-| `ANTHROPIC_API_KEY` | The gateway token (or a console.anthropic.com key). Used when `AI_PROVIDER=claude`. |
-| `ANTHROPIC_BASE_URL` | Custom gateway, e.g. `https://ai.focasedu.online/v1/messages`. Leave blank for Anthropic direct. A full `/v1/messages` URL is fine — it is reduced to the origin, since the SDK appends the path itself. |
-| `ANTHROPIC_AUTH_STYLE` | `x-api-key` (default) or `bearer`, depending on what the gateway expects. |
-| `ANTHROPIC_MODEL` | Default `claude-opus-5`. For a cheaper/faster FAQ bot use `claude-haiku-4-5` or `claude-sonnet-5`. |
-| `ANTHROPIC_EFFORT` | Reasoning depth: `low` (default, right for FAQ replies) through `max`. |
-| `OPENAI_API_KEY` | Used when `AI_PROVIDER=openai`, and **always** for semantic knowledge-base search. |
+| `OPENAI_API_KEY` | Required. Used for every answer and for semantic knowledge-base search. |
+| `OPENAI_CHAT_MODEL` | Default `gpt-4o-mini`. |
+| `OPENAI_EMBEDDING_MODEL` | Default `text-embedding-3-small`. |
+| `OPENAI_BASE_URL` | Optional OpenAI-compatible endpoint. Leave blank for api.openai.com. |
 
-The selected provider must have its own key; the bot never silently switches providers.
 Verify with `npm run check:ai`.
 
 ### Knowledge-base search modes
@@ -45,14 +43,11 @@ Retrieval uses `KB_SEARCH_MODE=auto` by default: semantic search when embeddings
 with keyword search over the same files if embeddings are unavailable. Set
 `KB_SEARCH_MODE=lexical` to skip embeddings entirely.
 
-- **`OPENAI_API_KEY` set** → semantic search (embeddings). Understands that "do you help with
-  jobs" relates to a *Placement* section. Recommended.
-- **Claude only** → keyword search over the same chunks. No extra cost or setup, but it only
-  matches words that actually appear in your text. Keyword triggers with `kbFilter` cover the
-  gap: a scoped trigger always returns its section regardless of word overlap.
-
-You can run Claude for answers *and* OpenAI purely for search — set both keys with
-`AI_PROVIDER=claude`.
+- **Semantic (default)** → embeddings. Understands that "do you help with jobs" relates to a
+  *Placement* section. Recommended.
+- **`KB_SEARCH_MODE=lexical`** → keyword search over the same chunks. No embedding cost, but it
+  only matches words that actually appear in your text. Keyword triggers with `kbFilter` cover
+  the gap: a scoped trigger always returns its section regardless of word overlap.
 
 ## 2. Put your knowledge in
 
@@ -135,8 +130,8 @@ OpenAI request construction with a local mock provider, without contacting OpenA
 
 ```bash
 npm run chat            # terminal chat with the same logic; type /why to see how a reply was chosen
-npm run check:ai        # verify the AI provider answers
-npm run check:ai -- claude   # force one provider
+npm run check:ai        # verify OpenAI answers
+npm run check:ai -- "what are the fees"   # ask a specific question
 npm run check:wati      # verify WATI credentials
 ```
 
@@ -146,10 +141,6 @@ Or run the server and poke it:
 npm start
 curl "localhost:3000/match?text=what%20are%20the%20fees"
 curl -X POST localhost:3000/simulate -H 'content-type: application/json' -d '{"text":"hi"}'
-
-# compare providers on the same question
-curl -X POST localhost:3000/simulate -H 'content-type: application/json' \
-  -d '{"text":"what are the fees","provider":"claude"}'
 ```
 
 ## 4. Connect WATI later
@@ -176,7 +167,7 @@ Browser testing alone does not validate production delivery or human handover op
 | POST | `/api/chat` | `{ "sessionId": "unique-id", "text": "..." }` → test reply and retrieved sources |
 | DELETE | `/api/chat/:sessionId` | Clear a browser conversation |
 | GET | `/api/knowledge` | Knowledge file titles and contents |
-| POST | `/simulate` | `{ "text": "...", "provider": "claude" }` → the reply, without sending anything to WhatsApp |
+| POST | `/simulate` | `{ "text": "..." }` → the reply, without sending anything to WhatsApp |
 | GET | `/match?text=...` | Which trigger a phrase hits |
 | POST | `/reindex` | Re-embed the knowledge base after editing files |
 | GET | `/health` | Index size, trigger count, active sessions, allowlist, opt-in and campaign-group counts |
@@ -226,12 +217,6 @@ Browser testing alone does not validate production delivery or human handover op
 - **Grounding.** The model is instructed to answer only from retrieved knowledge chunks and to
   offer a human when it does not know. Retrieval below `KB_MIN_SCORE` is dropped, except when a
   trigger's `kbFilter` already scoped the search to one section.
-- **Refusals (Claude).** Requests use server-side refusal fallbacks, so a declined request is
-  retried on a fallback model inside the same call.
-- **Gateway compatibility.** Older Anthropic-compatible proxies may reject newer request
-  fields. On a 400 the provider drops `fallbacks`, then `output_config.effort`, logs one
-  warning each, and retries — so a limited gateway still works at reduced features rather
-  than failing. Verify what yours accepts with `npm run check:ai -- claude`.
 - **Duplicates.** Repeated webhook deliveries of the same message id are ignored.
 
 ## Files
@@ -244,8 +229,7 @@ Browser testing alone does not validate production delivery or human handover op
 | [src/handler.js](src/handler.js) | The brain: trigger → action → reply |
 | [src/keywords.js](src/keywords.js) | Trigger loading and matching |
 | [src/kb.js](src/kb.js) | Chunking, embedding, cosine search |
-| [src/ai.js](src/ai.js) | Retrieval, prompt assembly, provider dispatch |
-| [src/providers/claude.js](src/providers/claude.js) | Anthropic SDK call (adaptive thinking, refusal fallbacks) |
+| [src/ai.js](src/ai.js) | Retrieval, prompt assembly, OpenAI call |
 | [src/providers/openai.js](src/providers/openai.js) | OpenAI chat completion call |
 | [src/wati.js](src/wati.js) | WATI send API (session, template, buttons) |
 | [src/sessions.js](src/sessions.js) | Per-contact memory, handover pause, de-dup |

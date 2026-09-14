@@ -9,7 +9,7 @@ services:
     image: wati-chatbot:latest
     restart: unless-stopped
 
-    # Reads WATI, Claude, OpenAI and Mongo credentials from the same .env the
+    # Reads WATI, OpenAI and Mongo credentials from the same .env the
     # app uses outside Docker, so there is one place to change a credential.
     #
     # WHATSAPP_ALLOWED_NUMBERS lives in there and is the only thing standing

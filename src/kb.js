@@ -115,7 +115,7 @@ function corpusHash(chunks) {
   return sha1(`${config.openai.embeddingModel}::${chunks.map((c) => c.text).join(' ')}`);
 }
 
-/** Semantic search needs OpenAI embeddings; Anthropic has no embeddings API. */
+/** Semantic search needs an OpenAI key; KB_SEARCH_MODE=lexical opts out of it. */
 const embeddingsAvailable = () => !!config.openai.apiKey && config.kb.searchMode !== 'lexical';
 
 /** Builds (or reuses) the embedding index. Set force to ignore the cache. */
@@ -128,7 +128,7 @@ export async function ensureIndex({ force = false, log = () => {} } = {}) {
   }
 
   if (!embeddingsAvailable()) {
-    // Claude-only setup: fall back to keyword search over the same chunks.
+    // No key or lexical mode: keyword search over the same chunks.
     store = { hash: corpusHash(chunks), mode: 'lexical', model: null, chunks };
     log(`Knowledge base ready: ${chunks.length} chunks, keyword search.`);
     return store;
