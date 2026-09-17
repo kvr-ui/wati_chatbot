@@ -2,11 +2,13 @@ import express from 'express';
 import path from 'node:path';
 import { config, assertConfig, normalizeWaId } from './config.js';
 import { handleMessage } from './handler.js';
-import { sendSessionMessage } from './wati.js';
+import { sendSessionMessage, assignOperator } from './wati.js';
 import { ensureIndex, indexStats, buildChunks } from './kb.js';
-import { isNewMessage, deleteSession, stats as sessionStats } from './sessions.js';
+import { deleteSession, stats as sessionStats } from './sessions.js';
+import { isNewMessage } from './dedup.js';
+import { extendHandover, resume as resumeHandover } from './handover.js';
 import { matchTrigger, listTriggerIds } from './keywords.js';
-import { matchesUnlockPhrase, isOptedIn, optIn, optInCount } from './optin.js';
+import { matchesUnlockPhrase, isOptedIn, optIn, touchOptIn, optInCount, activeOptInCount } from './optin.js';
 import { optOutCount, resetOptOut } from './optout.js';
 import { groupCounts, resetCampaign } from './campaign.js';
 import { listFeedback, saveFeedback } from './feedback.js';
@@ -34,6 +36,13 @@ const log = (...args) => console.log(new Date().toISOString(), ...args);
 export function parseWatiEvent(body = {}) {
   const eventType = body.eventType || body.type;
   const isIncoming = body.owner === false || body.owner === 'false';
+  const waId = body.waId || body.whatsappNumber;
+
+  // Something we sent - most often an agent typing in the WATI inbox. Nothing
+  // to answer, but it tells us a handover is still in progress.
+  if (body.owner === true || body.owner === 'true') {
+    return { skip: true, outgoing: true, waId, reason: `outgoing event: ${eventType}` };
+  }
 
   // WATI fires many event types; only inbound customer messages should reach the bot.
   if (eventType !== 'message' || !isIncoming) {
@@ -50,7 +59,7 @@ export function parseWatiEvent(body = {}) {
 
   return {
     skip: false,
-    waId: body.waId || body.whatsappNumber,
+    waId,
     name: body.senderName || body.name,
     text: String(text).trim(),
     // Anything that carried words is answerable, whatever WATI called it: a
@@ -76,19 +85,60 @@ function isAllowed(waId) {
  *
  * Numbers in WHATSAPP_ALLOWED_NUMBERS are always answered. Anyone else stays
  * ignored until they send the campaign phrase (WHATSAPP_UNLOCK_PHRASE - the
- * "Jan 2027" ad message). That message opts in that single number, so the bot
- * replies to that lead from then on and still to nobody else.
+ * "Jan 2027" ad message). That message opts in that single number for
+ * WHATSAPP_OPTIN_HOURS, so the bot replies to that lead for that long and still
+ * to nobody else. Sending the phrase again opens a new window.
  */
 async function admit(event) {
   if (isAllowed(event.waId)) return { ok: true, reason: 'allowlist' };
-  if (await isOptedIn(event.waId)) return { ok: true, reason: 'opted_in' };
+  if (await isOptedIn(event.waId)) {
+    // The window is 48 hours of silence, not 48 hours from the phrase.
+    await touchOptIn(event.waId);
+    return { ok: true, reason: 'opted_in' };
+  }
   if (matchesUnlockPhrase(event.text)) {
     await optIn(event.waId, { name: event.name, text: event.text });
-    log(`opt-in: ${event.waId} sent the campaign phrase; replying to this lead from now on`);
+    log(`opt-in: ${event.waId} sent the campaign phrase; replying to this lead for ${config.whatsappOptInHours} hours`);
     return { ok: true, reason: 'opt_in_phrase' };
   }
-  return { ok: false, reason: 'not allowed and has not sent the campaign phrase' };
+  return { ok: false, reason: `not allowed, or silent for over ${config.whatsappOptInHours} hours since the campaign phrase` };
 }
+
+/* One contact's messages are handled one at a time, in the order they arrived.
+ * A lead who sends "Jan 2027" and then "fees?" straight after used to have both
+ * handled at once: the second could be turned away before the first opted the
+ * number in, and a quick static reply could overtake a slower AI answer. */
+const queues = new Map();
+
+function inTurn(key, task) {
+  const run = (queues.get(key) ?? Promise.resolve()).then(task);
+  const tail = run.catch(() => {});
+  queues.set(key, tail);
+  tail.then(() => {
+    if (queues.get(key) === tail) queues.delete(key);
+  });
+  return run;
+}
+
+/* Answered messages per number in the last hour, so one contact - or a script
+ * that has learnt the public campaign phrase - cannot run up the OpenAI bill. */
+const recent = new Map();
+
+function overRateLimit(waId) {
+  const key = normalizeWaId(waId);
+  const now = Date.now();
+  const times = (recent.get(key) ?? []).filter((t) => now - t < 60 * 60_000);
+  times.push(now);
+  recent.set(key, times);
+  return times.length > config.whatsappMaxMessagesPerHour;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, times] of recent) {
+    if (times.every((t) => now - t >= 60 * 60_000)) recent.delete(key);
+  }
+}, 10 * 60_000).unref();
 
 async function processEvent(event) {
   const { replies, meta } = await handleMessage(event);
@@ -98,6 +148,17 @@ async function processEvent(event) {
   for (const reply of replies) {
     await sendSessionMessage(event.waId, reply);
     log(`-> ${event.waId} "${reply.slice(0, 80)}"`);
+  }
+
+  // The handover message promises a person; this is what tells one.
+  if (meta.handover) {
+    if (!config.bot.handoverOperatorEmail) {
+      log(`handover: ${event.waId} asked for a person, but HANDOVER_OPERATOR_EMAIL is not set - nobody was assigned`);
+    } else {
+      await assignOperator(event.waId, config.bot.handoverOperatorEmail)
+        .then(() => log(`handover: ${event.waId} assigned to ${config.bot.handoverOperatorEmail}`))
+        .catch((err) => console.error('handover assignment failed:', err.message));
+    }
   }
 }
 
@@ -115,15 +176,26 @@ app.post('/webhook/wati', (req, res) => {
   res.status(200).json({ ok: true });
 
   const event = parseWatiEvent(req.body);
+  if (event.outgoing && event.waId) {
+    extendHandover(event.waId)
+      .then((extended) => extended && log(`handover: agent still active with ${event.waId}; pause extended`))
+      .catch((err) => console.error('handover extend failed:', err.message));
+  }
   if (event.skip) return log('skip:', event.reason);
-  if (!event.waId || !event.text) return log('skip: missing waId or text');
-  // De-duplicate before admission so a WATI retry cannot re-run the opt-in.
-  if (!isNewMessage(event.messageId)) return log('skip: duplicate', event.messageId);
+  // A photo or voice note has no text but still deserves an answer.
+  if (!event.waId || (!event.text && !event.rawType)) return log('skip: missing waId or content');
 
   // Nothing is ever sent to a contact that was not admitted, errors included.
-  (async () => {
+  inTurn(normalizeWaId(event.waId), async () => {
+    // De-duplicate before admission so a WATI retry cannot re-run the opt-in.
+    if (!(await isNewMessage(event.messageId))) return log('skip: duplicate', event.messageId);
+
     const verdict = await admit(event);
     if (!verdict.ok) return log(`skip: ${event.waId} ${verdict.reason}`);
+    // Numbers listed by name are our own testers; everyone else is limited, also when the list is empty.
+    if (!config.whatsappAllowedNumbers.has(normalizeWaId(event.waId)) && overRateLimit(event.waId)) {
+      return log(`skip: ${event.waId} sent over ${config.whatsappMaxMessagesPerHour} messages in an hour`);
+    }
 
     try {
       await processEvent(event);
@@ -138,7 +210,7 @@ app.post('/webhook/wati', (req, res) => {
         console.error('failed to send error notice:', sendErr.message);
       }
     }
-  })().catch((err) => console.error('admission check failed:', err));
+  }).catch((err) => console.error('admission check failed:', err));
 });
 
 app.get('/health', async (_req, res) => {
@@ -155,6 +227,8 @@ app.get('/health', async (_req, res) => {
     whatsappUnlockPhrases: config.whatsappUnlockPhrases,
     // A count only: opted-in numbers are real customers, and /health has no login.
     whatsappOptIns: optInCount(),
+    whatsappActiveOptIns: activeOptInCount(),
+    whatsappOptInHours: config.whatsappOptInHours,
     whatsappOptOuts: optOutCount(),
     campaignGroups: groupCounts(),
     kb: indexStats(),
@@ -201,9 +275,10 @@ app.delete('/api/chat/:sessionId', async (req, res) => {
   if (!validSession(id)) return res.status(400).json({ error: 'Invalid session ID.' });
   if (busySessions.has(id)) return res.status(409).json({ error: 'Wait for the current reply before starting a new chat.' });
   deleteSession(`preview:${id}`);
-  // Also forget the campaign script, so a tester can run it from the top again.
+  // Also forget the campaign script, STOP and any handover, so a tester can run it from the top again.
   await resetCampaign(`preview:${id}`);
   await resetOptOut(`preview:${id}`);
+  await resumeHandover(`preview:${id}`);
   res.json({ ok: true });
 });
 

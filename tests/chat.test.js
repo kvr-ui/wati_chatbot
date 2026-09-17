@@ -152,6 +152,9 @@ test('errors are redacted, failed turns are not remembered, a missing OpenAI key
   assert.match(result.data.error, /API key/);
   assert.ok(!JSON.stringify(result).includes('secret-test-token'));
   assert.deepEqual(getSession('preview:failure').history, []);
+  // Not remembered, but still on record, so the lead's message is not lost.
+  const failed = await (await getDb()).collection(config.mongo.messages).findOne({ waId: 'preview:failure', reason: 'error' });
+  assert.equal(failed?.text, 'fees');
   await post('fees', 'failure');
   assert.equal(calls.at(-1).body.messages.filter((m) => m.role === 'user').length, 1);
   const { assertAiConfigured } = await import('../src/ai.js');
@@ -241,7 +244,58 @@ test('the campaign phrase opts in one lead at a time and survives a restart', as
   const health = await (await fetch(`${base}/health`)).json();
   assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt']);
   assert.equal(typeof health.whatsappOptIns, 'number');
+  assert.equal(health.whatsappOptInHours, 48);
   assert.ok(!JSON.stringify(health).includes(lead)); // real numbers stay out of /health
+});
+
+test('a campaign opt-in keeps the bot on for 48 hours, then it goes quiet until the phrase comes again', async () => {
+  const { isOptedIn, optIn, loadOptIns } = await import('../src/optin.js');
+  const optins = (await getDb()).collection(config.mongo.optins);
+  const hoursAgo = (h) => new Date(Date.now() - h * 60 * 60 * 1000);
+
+  // Opted in 47 hours ago: still on. 49 hours ago: off. Both as read back after a restart.
+  await optins.insertMany([
+    { waId: '919000000011', text: 'your last attempt', createdAt: hoursAgo(47), unlockedAt: hoursAgo(47) },
+    { waId: '919000000012', text: 'your last attempt', createdAt: hoursAgo(49), unlockedAt: hoursAgo(49) },
+    // Saved before the window existed: only createdAt, which counts as the start.
+    { waId: '919000000013', text: 'jan 2027', createdAt: hoursAgo(72) },
+  ]);
+  await loadOptIns();
+  assert.equal(await isOptedIn('919000000011'), true);
+  assert.equal(await isOptedIn('919000000012'), false);
+  assert.equal(await isOptedIn('919000000013'), false);
+
+  // Sending the phrase again opens a fresh window from now, in memory and in the database.
+  await optIn('919000000012', { name: 'Lead', text: 'Your Last Attempt' });
+  assert.equal(await isOptedIn('919000000012'), true);
+  const reopened = await optins.findOne({ waId: '919000000012' });
+  assert.ok(Date.now() - reopened.unlockedAt.getTime() < 60_000);
+  assert.ok(Date.now() - reopened.createdAt.getTime() > 48 * 60 * 60 * 1000, 'the first opt-in date was overwritten');
+});
+
+test('the 48 hours run from the lead\'s last message, not from the phrase', async () => {
+  const { isOptedIn, touchOptIn, loadOptIns } = await import('../src/optin.js');
+  const optins = (await getDb()).collection(config.mongo.optins);
+  const hoursAgo = (h) => new Date(Date.now() - h * 60 * 60 * 1000);
+
+  // Phrase sent three days ago, but still chatting yesterday: the bot stays on.
+  await optins.insertMany([
+    { waId: '919000000021', createdAt: hoursAgo(72), unlockedAt: hoursAgo(72), lastMessageAt: hoursAgo(24) },
+    { waId: '919000000022', createdAt: hoursAgo(72), unlockedAt: hoursAgo(72), lastMessageAt: hoursAgo(49) },
+  ]);
+  await loadOptIns();
+  assert.equal(await isOptedIn('919000000021'), true);
+  assert.equal(await isOptedIn('919000000022'), false);
+
+  // Each message restarts the clock, and the database records it for the next restart.
+  await touchOptIn('919000000021');
+  const touched = await optins.findOne({ waId: '919000000021' });
+  assert.ok(Date.now() - touched.lastMessageAt.getTime() < 60_000);
+
+  // A message after the window has closed does not reopen it; only the phrase does.
+  await touchOptIn('919000000022');
+  assert.equal(await isOptedIn('919000000022'), false);
+  assert.ok(Date.now() - (await optins.findOne({ waId: '919000000022' })).lastMessageAt.getTime() > 48 * 60 * 60 * 1000);
 });
 
 test('the Jan 2027 ad opens with the group question and answers with the matching pitch', async () => {
@@ -263,8 +317,13 @@ test('the Jan 2027 ad opens with the group question and answers with the matchin
   assert.match(asked.data.replies[0], /Which group are you planning to take the exam in January 2027\?/);
   assert.match(asked.data.replies[0], /4\. Unit 2D/);
 
+  // A question in place of an answer is answered, and the group question stays open.
+  const question = await post('what is the difference between them?', session);
+  assert.notEqual(question.data.meta.reason, 'campaign_group_reask');
+  assert.ok(!question.data.replies[0].includes('Which group'));
+
   // An unclear answer is re-asked exactly once.
-  const reask = await post('what is the difference between them', session);
+  const reask = await post('not sure', session);
   assert.equal(reask.data.meta.reason, 'campaign_group_reask');
   assert.match(reask.data.replies[0], /Which group are you planning/);
 
@@ -362,6 +421,14 @@ test('a lead who replies STOP gets no reply, now or ever, even after a restart',
 
   // "stop" inside a real question is not an opt-out.
   assert.notEqual((await post('which bus stop is near the centre?', 'not-stopped')).data.meta.reason, 'opted_out');
+  assert.notEqual((await post('can I stop the course midway?', 'not-stopped')).data.meta.reason, 'opted_out');
+
+  // A STOP in a sentence counts too.
+  for (const [i, text] of ['please stop', 'Stop messaging me!', "don't text me again", 'remove my number'].entries()) {
+    const said = await post(text, `stopped-phrase-${i}`);
+    assert.deepEqual(said.data.replies, [], `"${text}" was answered`);
+    assert.equal(said.data.meta.reason, 'opted_out', `"${text}" was not read as STOP`);
+  }
 
   // Only the playground reset lifts it, so testers can run the chat again.
   assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
@@ -380,4 +447,115 @@ test('the "Your Last Attempt" ad starts the same group question as Jan 2027', as
 
   // Asking about the kit by name is a question, not the ad.
   assert.notEqual((await post('what is in your last attempt kit?', 'kit-question')).data.meta.reason, 'campaign_group_asked');
+});
+
+test('a WhatsApp STOP is stored as digits, so any spelling of the number stays silenced', async () => {
+  const { handleMessage } = await import('../src/handler.js');
+  const { isOptedOut } = await import('../src/optout.js');
+  const stop = await handleMessage({ waId: '+91 98000 00001', name: 'Lead', text: 'STOP' });
+  assert.equal(stop.meta.reason, 'opted_out');
+
+  const stored = await (await getDb()).collection(config.mongo.optouts).findOne({ waId: '919800000001' });
+  assert.ok(stored, 'opt-out was not saved under the digits-only id');
+  assert.equal(await isOptedOut('919800000001'), true);
+  assert.equal(await isOptedOut('+919800000001'), true);
+});
+
+test('numbers inside a real sentence are not read as a group', async () => {
+  const { matchGroup } = await import('../src/campaign.js');
+  assert.equal(matchGroup('can I pay in 2 installments'), null);
+  assert.equal(matchGroup('I paid 1 hour ago'), null);
+  assert.equal(matchGroup('grp 1 pls'), 'Group 1');
+  assert.equal(matchGroup('g1 and g2'), 'Both Groups');
+  assert.equal(matchGroup('one'), 'Group 1');
+  assert.equal(matchGroup('7'), null);
+});
+
+test('mid-campaign: asking for a person hands over, and a question with the ad phrase is answered too', async () => {
+  const session = 'campaign-handover';
+  assert.equal((await post('jan 2027', session)).data.meta.reason, 'campaign_group_asked');
+  const handover = await post('I want to talk to a counsellor', session);
+  assert.equal(handover.data.meta.reason, 'handover');
+  assert.deepEqual((await post('hello?', session)).data.replies, []);
+
+  // A new lead whose first message is a question gets the answer, then the group question.
+  const both = await post('is the kit good for your last attempt?', 'campaign-question-first');
+  assert.equal(both.data.meta.reason, 'campaign_group_asked');
+  assert.equal(both.data.replies.length, 2);
+  assert.match(both.data.replies[0], /₹/);
+  assert.match(both.data.replies[1], /Which group are you planning/);
+
+  // Naming the group and asking something in one message gets the pitch and the answer.
+  const named = await post('Group 1, what are the fees?', 'campaign-question-first');
+  assert.equal(named.data.meta.reason, 'campaign_group_answered');
+  assert.equal(named.data.replies.length, 2);
+  assert.match(named.data.replies[0], /we offer classes for Group 1/);
+  assert.match(named.data.replies[1], /₹/);
+});
+
+test('"agent" inside a question is not a handover', async () => {
+  for (const text of ['what agent fees', 'an executive will call?']) {
+    assert.notEqual((await post(text, 'not-handover')).data.meta.reason, 'handover', text);
+  }
+});
+
+test('a handover pause outlives the session and is stored, and an agent message extends it', async () => {
+  const { isPaused, extendHandover } = await import('../src/handover.js');
+  const session = 'handover-long';
+  assert.equal((await post('agent', session)).data.meta.reason, 'handover');
+
+  // The in-memory session expires (SESSION_TTL_MINUTES) - the bot must stay silent.
+  const ttl = config.bot.sessionTtlMs;
+  config.bot.sessionTtlMs = -1;
+  try {
+    assert.deepEqual((await post('fees', session)).data.replies, []);
+  } finally {
+    config.bot.sessionTtlMs = ttl;
+  }
+
+  const stored = await (await getDb()).collection(config.mongo.handovers).findOne({ waId: `preview:${session}` });
+  assert.ok(stored.pausedUntil.getTime() > Date.now());
+
+  assert.equal(await extendHandover(`preview:${session}`), true);
+  assert.equal(await extendHandover('preview:nobody-paused'), false);
+  assert.equal(await isPaused('preview:nobody-paused'), false);
+
+  // A new chat in the playground clears it.
+  assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
+  assert.equal(await isPaused(`preview:${session}`), false);
+});
+
+test('a photo gets one short notice, a reaction gets nothing, and nothing during a handover', async () => {
+  const { handleMessage } = await import('../src/handler.js');
+  const photo = await handleMessage({ waId: 'preview:media', type: 'image', text: '' });
+  assert.equal(photo.meta.reason, 'non_text');
+  assert.match(photo.replies[0], /type your question/);
+  assert.deepEqual((await handleMessage({ waId: 'preview:media', type: 'image', text: '' })).replies, []);
+  assert.deepEqual((await handleMessage({ waId: 'preview:media-2', type: 'reaction', text: '' })).replies, []);
+
+  await post('agent', 'media-handover');
+  assert.deepEqual((await handleMessage({ waId: 'preview:media-handover', type: 'image', text: '' })).replies, []);
+
+  // The webhook parser lets media through, and marks what we sent as outgoing.
+  const { parseWatiEvent } = await import('../src/app.js');
+  assert.equal(parseWatiEvent({ eventType: 'message', owner: false, waId: '91', type: 'image' }).skip, false);
+  const sent = parseWatiEvent({ eventType: 'sessionMessageSent', owner: true, waId: '91' });
+  assert.equal(sent.outgoing, true);
+  assert.equal(sent.skip, true);
+});
+
+test('a WATI retry is recognised even after the in-memory list is gone', async () => {
+  const { isNewMessage } = await import('../src/dedup.js');
+  assert.equal(await isNewMessage('wamid-test-1'), true);
+  assert.equal(await isNewMessage('wamid-test-1'), false);
+  const stored = await (await getDb()).collection(config.mongo.webhookEvents).findOne({ messageId: 'wamid-test-1' });
+  assert.ok(stored);
+});
+
+test('long replies full of emoji are split to fit the URL as well as WhatsApp', async () => {
+  const { splitLongText } = await import('../src/wati.js');
+  const parts = splitLongText('🙏 नमस्ते '.repeat(500));
+  assert.ok(parts.length > 1);
+  for (const part of parts) assert.ok(encodeURIComponent(part).length <= 6000 && part.length <= 4000);
+  assert.deepEqual(splitLongText('short'), ['short']);
 });

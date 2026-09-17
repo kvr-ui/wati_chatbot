@@ -1,4 +1,4 @@
-import { normalizeWaId } from './config.js';
+import { config, contactKey } from './config.js';
 import { campaign as campaignCollection } from './mongo.js';
 import { matchesUnlockPhrase, isBareUnlockPhrase } from './optin.js';
 
@@ -60,8 +60,14 @@ const MAX_ASKS = 2;
 
 const normalize = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** A bare digit is read as a pick from the numbered list above. */
-const byNumber = Object.fromEntries(GROUPS.map((group, i) => [String(i + 1), group]));
+/** A bare digit, or the number spelt out, is read as a pick from the numbered list above. */
+const WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const byNumber = Object.fromEntries(
+  GROUPS.flatMap((group, i) => [[String(i + 1), group], [WORDS[i], group]])
+);
+
+/** Up to this many words, a lone 1 or 2 is taken as the group: "grp 1 pls", "1 and 2". */
+const SHORT_REPLY_WORDS = 3;
 
 /**
  * Reads a group out of a free-text reply: "2", "grp 2", "both", "unit 2d".
@@ -72,28 +78,51 @@ export function matchGroup(text) {
   const t = normalize(text);
   if (!t) return null;
 
-  if (/^[1-9][0-9]*$/.test(t)) return byNumber[t] ?? null;
+  if (byNumber[t]) return byNumber[t];
+  if (/^[0-9]+$/.test(t)) return null;
+
+  // A number inside a longer sentence is usually not a group at all: "can I pay
+  // in 2 installments", "I paid 1 hour ago". Only a short reply may use one bare.
+  const short = t.split(' ').length <= SHORT_REPLY_WORDS;
+  const G = '(?:group|grp|gp|g)';
 
   // "Both" and "2D" are checked first: "group 1 and group 2" contains both
   // single groups, and "unit 2d" contains a bare 2.
-  if (/\bboth\b/.test(t) || /\b1\s*(and|n|plus)?\s*2\b/.test(t) || /\bgroup\s*1\s*(and|n|plus)?\s*group\s*2\b/.test(t)) {
+  if (
+    /\bboth\b/.test(t) ||
+    new RegExp(`\\b${G}\\s*(?:1|one)\\s*(?:and|n|plus)?\\s*(?:${G}\\s*)?(?:2|two)\\b`).test(t) ||
+    (short && /\b1\s*(?:and|n|plus)?\s*2\b/.test(t))
+  ) {
     return 'Both Groups';
   }
   if (/\b(unit\s*)?2\s*d\b/.test(t)) return 'Unit 2D';
-  if (/\b(group|grp|gp|g)\s*(1|one)\b/.test(t) || /\b1\b/.test(t)) return 'Group 1';
-  if (/\b(group|grp|gp|g)\s*(2|two)\b/.test(t) || /\b2\b/.test(t)) return 'Group 2';
+  if (new RegExp(`\\b${G}\\s*(?:1|one)\\b`).test(t) || (short && /\b1\b/.test(t))) return 'Group 1';
+  if (new RegExp(`\\b${G}\\s*(?:2|two)\\b`).test(t) || (short && /\b2\b/.test(t))) return 'Group 2';
   return null;
+}
+
+/**
+ * True when a message asks something: a question mark, or an opening such as
+ * "what", "how much", "is there". Used to tell a real question apart from an
+ * unclear answer to the group question.
+ */
+export function looksLikeQuestion(text) {
+  const raw = String(text ?? '');
+  if (raw.includes('?')) return true;
+  return /^(?:hi |hello |sir |mam |ok |okay )*(?:what|whats|how|when|where|which|who|why|is|are|can|could|do|does|did|will|would|should|any|tell me|kitna|kitne|kab|kya)\b/.test(normalize(raw));
 }
 
 /* ------------------------------- the state ----------------------------- */
 
 const memory = new Map();
 
-/** Browser preview sessions keep their prefix; WhatsApp ids reduce to digits. */
-const keyFor = (waId) => {
-  const raw = String(waId ?? '').trim();
-  return raw.startsWith('preview:') ? raw : normalizeWaId(raw);
-};
+const stateOf = (doc) => ({
+  status: doc.status,
+  asked: doc.asked ?? 0,
+  group: doc.group ?? null,
+  name: doc.name ?? null,
+  askedAt: doc.askedAt ?? doc.startedAt ?? doc.updatedAt ?? null,
+});
 
 /**
  * Memory first, database second. If the database is unreachable the lead is
@@ -105,7 +134,7 @@ async function getState(key) {
   try {
     const doc = await (await campaignCollection()).findOne({ waId: key });
     if (!doc) return null;
-    const state = { status: doc.status, asked: doc.asked ?? 0, group: doc.group ?? null, name: doc.name ?? null };
+    const state = stateOf(doc);
     memory.set(key, state);
     return state;
   } catch (err) {
@@ -132,17 +161,31 @@ async function save(key, patch) {
 
 /* -------------------------------- the flow ----------------------------- */
 
+/** A question left unanswered this long is dropped: the lead has moved on. */
+const isStale = (state) =>
+  !state.askedAt || Date.now() - new Date(state.askedAt).getTime() > config.whatsappOptInHours * 60 * 60 * 1000;
+
 /**
  * One step of the script.
  *
- * @returns {{replies: string[], meta: object} | null} null when this message is
- *   not part of the script and should be answered the usual way.
+ * `hasTopic` is true when the message matched a knowledge-base trigger (fees,
+ * timings, kit...): the lead asked about something, rather than answering badly.
+ *
+ * @returns {{replies: string[], meta: object, answer?: 'before'|'after'} | null}
+ *   null when this message is not part of the script and should be answered the
+ *   usual way. `answer` asks the caller to also answer the message normally,
+ *   before or after these replies, because it carried a question of its own.
  */
-export async function campaignStep({ waId, name = null, text }) {
-  const key = keyFor(waId);
+export async function campaignStep({ waId, name = null, text, hasTopic = false }) {
+  const key = contactKey(waId);
   if (!key) return null;
 
-  const state = await getState(key);
+  let state = await getState(key);
+  const question = looksLikeQuestion(text);
+
+  if (state?.status === 'awaiting' && isStale(state)) {
+    state = await save(key, { status: 'unanswered' });
+  }
 
   if (state?.status === 'awaiting') {
     const group = matchGroup(text);
@@ -151,12 +194,18 @@ export async function campaignStep({ waId, name = null, text }) {
       return {
         replies: [groupPitch(group)],
         meta: { trigger: 'campaign_group', reason: 'campaign_group_answered', group },
+        // "Group 1 - what are the fees?" named the group and asked something too.
+        ...(question ? { answer: 'after' } : {}),
       };
     }
 
+    // A question in place of an answer is answered, and the group question stays
+    // open for the lead's next message. Only an unclear reply ("ok", "hmm") re-asks.
+    if (question || hasTopic) return null;
+
     const asked = state.asked ?? 1;
     if (asked < MAX_ASKS) {
-      await save(key, { asked: asked + 1 });
+      await save(key, { asked: asked + 1, askedAt: new Date() });
       return { replies: [REASK], meta: { reason: 'campaign_group_reask' } };
     }
 
@@ -179,8 +228,15 @@ export async function campaignStep({ waId, name = null, text }) {
   // Only an untouched lead starts the script, so a lead who answered once (or
   // was let through) is never asked again, however often the ad phrase recurs.
   if (!state && matchesUnlockPhrase(text)) {
-    await save(key, { status: 'awaiting', asked: 1, name, group: null, startedAt: new Date() });
-    return { replies: [GROUP_QUESTION], meta: { reason: 'campaign_group_asked' } };
+    const now = new Date();
+    await save(key, { status: 'awaiting', asked: 1, name, group: null, startedAt: now, askedAt: now });
+    return {
+      replies: [GROUP_QUESTION],
+      meta: { reason: 'campaign_group_asked' },
+      // The bare ad message gets the question alone; "is the kit good for your
+      // last attempt?" is a question first, and gets its answer before ours.
+      ...(question ? { answer: 'before' } : {}),
+    };
   }
 
   return null;
@@ -191,7 +247,7 @@ export async function loadCampaignState() {
   try {
     const docs = await (await campaignCollection()).find({}).toArray();
     for (const doc of docs) {
-      memory.set(doc.waId, { status: doc.status, asked: doc.asked ?? 0, group: doc.group ?? null, name: doc.name ?? null });
+      memory.set(doc.waId, stateOf(doc));
     }
   } catch (err) {
     console.error('campaign load failed:', err.message);
@@ -205,7 +261,7 @@ export async function loadCampaignState() {
  * without hand-editing the database.
  */
 export async function resetCampaign(waId) {
-  const key = keyFor(waId);
+  const key = contactKey(waId);
   if (!key) return false;
   memory.delete(key);
   try {

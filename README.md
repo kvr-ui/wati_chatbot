@@ -182,9 +182,13 @@ Browser testing alone does not validate production delivery or human handover op
   own number only* by sending the campaign phrase in `WHATSAPP_UNLOCK_PHRASE`
   (default `jan 2027, january 2027, your last attempt`, matched as whole words anywhere in the
   message, ignoring case and punctuation; "your last attempt kit" is a kit question and does not
-  count). That message is answered and the number is saved to the `wati_optins`
-  collection, so the bot keeps talking to that one lead after a restart — and still to nobody
-  else. Remove its document from `wati_optins` and restart to lock a number again; set
+  count). That message is answered and the bot keeps talking to that one lead — and still to
+  nobody else — until the lead has been silent for `WHATSAPP_OPTIN_HOURS` (default 48). Every
+  message they send restarts the clock, so a lead mid-conversation is never cut off. Once 48
+  hours pass with nothing from them the bot goes quiet for that lead; if they send the phrase
+  again, the bot turns back on. The lead's last message time is saved to the `wati_optins`
+  collection, so a restart neither cuts the window short nor reopens a closed one. Remove its document from `wati_optins` and restart
+  to lock a number early; set
   `WHATSAPP_UNLOCK_PHRASE=` empty to disable opt-in entirely. With `WHATSAPP_ALLOWED_NUMBERS`
   blank the bot answers everyone and the phrase is irrelevant.
 - **The January 2027 campaign script.** A lead arriving from either ad ("Jan 2027" or "Your Last Attempt") is asked one qualifying
@@ -209,14 +213,34 @@ Browser testing alone does not validate production delivery or human handover op
   the price and is hesitating — never as an opening offer. **If you edit either file, keep it
   under the 900-character `chunkSize`**: a longer file is split, and the offer can then be
   retrieved without the rule attached. A test guards this.
-- **STOP.** A lead who sends just `stop`, `unsubscribe` or `opt out` gets no reply, and the
-  bot never answers that number again — whatever they send later, the campaign phrase and `bot`
-  included. The number is saved to the `wati_optouts` collection, so a restart does not forget
-  it. Remove its document from `wati_optouts` and restart to let the bot talk to them again.
-  `/health` reports the count under `whatsappOptOuts`.
-- **Human handover.** After a `handover` trigger the bot stays silent for
-  `HANDOVER_PAUSE_MINUTES` (default 60) so your agent can take the chat. The customer typing
-  `bot` brings it back.
+- **STOP.** A lead whose whole message asks us to stop — `stop`, `please stop`, `stop messaging
+  me`, `don't text me again`, `unsubscribe`, `opt out`, `remove my number` — gets no reply, and
+  the bot never answers that number again, whatever they send later, the campaign phrase and
+  `bot` included. A question that only mentions stopping ("which bus stop is near the centre?")
+  is still answered. The number is saved as digits only to the `wati_optouts` collection, so a
+  restart does not forget it. If MongoDB is unreachable, WhatsApp leads the bot does not already
+  know about are treated as opted out: the bot goes quiet rather than risk messaging someone who
+  said STOP. Remove the lead's document from `wati_optouts` and restart to let the bot talk to
+  them again. `/health` reports the count under `whatsappOptOuts`.
+- **Human handover.** A lead who explicitly asks for a person ("agent", "talk to a counsellor",
+  "call me") — even halfway through the campaign question — gets the handover message, and the
+  bot stays silent for `HANDOVER_PAUSE_MINUTES` (default 60), photos and voice notes included.
+  Set `HANDOVER_OPERATOR_EMAIL` to a WATI user and the chat is assigned to them, so someone is
+  actually told; without it nobody is. Every message an agent sends in that chat restarts the
+  pause (this needs WATI's outgoing-message webhook events enabled), so the bot does not jump
+  back in mid-conversation. The pause is stored in `wati_handovers` and survives both session
+  expiry and restarts. The customer typing `bot` brings it back.
+- **Campaign question, continued.** While the group question is open, a real question ("what
+  are the fees?") is answered and the question stays open; only an unclear reply ("ok", "hmm")
+  is re-asked. A number inside a sentence ("can I pay in 2 installments") is not read as a
+  group. A new lead whose first message is a question containing the ad phrase gets the answer
+  and then the group question. An unanswered question is dropped after `WHATSAPP_OPTIN_HOURS`.
+- **Photos, voice notes and files.** The bot cannot read them; the lead gets one short "please
+  type your question" notice (at most once every 10 minutes). Reactions and stickers get nothing.
+- **Order, retries and limits.** One lead's messages are handled one at a time, in order. WATI
+  retries are recognised by message id, also after a restart (`wati_webhook_events`, kept 7
+  days). A number not listed in `WHATSAPP_ALLOWED_NUMBERS` gets at most
+  `WHATSAPP_MAX_MESSAGES_PER_HOUR` (default 60) answers an hour.
 - **Memory.** The last 12 turns per contact are kept in memory and dropped after
   `SESSION_TTL_MINUTES` of silence. It is a `Map` in [src/sessions.js](src/sessions.js) —
   replace it with Redis if you run more than one instance.

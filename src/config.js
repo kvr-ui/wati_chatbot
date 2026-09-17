@@ -18,6 +18,12 @@ const num = (v, fallback) => (v === undefined || v === '' || Number.isNaN(Number
 /** WhatsApp ids are bare digits with a country code; accept "+91 98…" style input too. */
 export const normalizeWaId = (v) => String(v ?? '').replace(/\D/g, '');
 
+/** The key a contact is stored under: browser preview sessions keep their prefix; WhatsApp ids reduce to digits. */
+export const contactKey = (waId) => {
+  const raw = String(waId ?? '').trim();
+  return raw.startsWith('preview:') ? raw : normalizeWaId(raw);
+};
+
 const phraseList = (v) =>
   String(v || '')
     .split(',')
@@ -45,6 +51,11 @@ export const config = {
   // everybody else stays ignored. Set WHATSAPP_UNLOCK_PHRASE empty to disable
   // it and leave the allowlist as the only way in.
   whatsappUnlockPhrases: phraseList(process.env.WHATSAPP_UNLOCK_PHRASE ?? 'jan 2027, january 2027, your last attempt'),
+  // How long an opted-in lead may stay silent before the bot turns off for them.
+  // Every message they send restarts it; so does sending the phrase again once it has closed.
+  whatsappOptInHours: num(process.env.WHATSAPP_OPTIN_HOURS, 48),
+  // Per-number ceiling on answered messages, so one contact cannot run up the OpenAI bill.
+  whatsappMaxMessagesPerHour: num(process.env.WHATSAPP_MAX_MESSAGES_PER_HOUR, 60),
   webhookVerifyToken: process.env.WEBHOOK_VERIFY_TOKEN || process.env.WATI_WEBHOOK_TOKEN || '',
 
   wati: {
@@ -75,6 +86,8 @@ export const config = {
       process.env.HANDOVER_MESSAGE || 'Sure - connecting you to a human agent. Please wait a moment.',
     sessionTtlMs: num(process.env.SESSION_TTL_MINUTES, 30) * 60_000,
     handoverPauseMs: num(process.env.HANDOVER_PAUSE_MINUTES, 60) * 60_000,
+    // WATI user the chat is assigned to on handover, so a person is actually told. Blank: no assignment.
+    handoverOperatorEmail: (process.env.HANDOVER_OPERATOR_EMAIL || '').trim(),
   },
 
   kb: {
@@ -100,6 +113,8 @@ export const config = {
     optins: process.env.MONGODB_OPTINS_COLLECTION || 'wati_optins',
     optouts: process.env.MONGODB_OPTOUTS_COLLECTION || 'wati_optouts',
     campaign: process.env.MONGODB_CAMPAIGN_COLLECTION || 'wati_campaign',
+    handovers: process.env.MONGODB_HANDOVERS_COLLECTION || 'wati_handovers',
+    webhookEvents: process.env.MONGODB_WEBHOOK_EVENTS_COLLECTION || 'wati_webhook_events',
   },
 };
 

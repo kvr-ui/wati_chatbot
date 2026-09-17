@@ -415,19 +415,18 @@
     },
     {
       "id": "human_handover",
-      "match": "contains",
+      "match": "regex",
+      "priority": 45,
       "keywords": [
-        "agent",
-        "human",
-        "customer care",
-        "executive",
-        "talk to someone",
-        "real person",
-        "counsellor",
-        "counselor"
+        "^(?:(?:hi|hello|ok|okay|please|pls|plz|sir|mam|maam|madam) )*(?:an? )?(?:agent|human|executive|counsell?or|real person|customer care|customer support|human agent|live agent)(?: (?:please|pls|plz|sir|mam|maam|madam))*$",
+        "\\b(?:talk|speak|chat|connect|transfer|put)\\w* (?:me )?(?:to|with|through to) (?:an? |the |your |some )?(?:agent|human|executive|counsell?or|person|real person|someone|somebody|team|staff|customer care)\\b",
+        "\\b(?:need|want|get|give me) (?:to (?:talk|speak) (?:to|with) )?(?:an? )?(?:agent|human|executive|counsell?or|real person|human agent|live agent)\\b",
+        "\\b(?:human agent|live agent|real person)\\b",
+        "\\b(?:call me|call back|callback)\\b"
       ],
       "action": "handover",
-      "reply": "Sure {{name}} — I'm connecting you to our team. Someone will reply here shortly. 🙏\n\n(Type *bot* if you'd like to go back to the assistant.)"
+      "reply": "Sure {{name}} — I'm connecting you to our team. Someone will reply here shortly. 🙏\n\n(Type *bot* if you'd like to go back to the assistant.)",
+      "_comment": "Only an explicit request for a person. A bare 'agent' anywhere used to fire on 'what agent fees' and 'an executive will call?'."
     },
     {
       "id": "resume_bot",

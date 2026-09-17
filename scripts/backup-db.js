@@ -26,7 +26,14 @@ const size = (f) => `${(statSync(f).size / 1024).toFixed(0)} KB`;
 
 let failed = false;
 
-for (const collection of [config.mongo.messages, config.mongo.leads, config.mongo.feedback]) {
+// wati_webhook_events is left out on purpose: a week of retry ids, worthless after a restore.
+const collections = [
+  config.mongo.messages, config.mongo.leads, config.mongo.feedback,
+  // Losing the STOP list would mean messaging people who asked us not to.
+  config.mongo.optouts, config.mongo.optins, config.mongo.campaign, config.mongo.handovers,
+];
+
+for (const collection of collections) {
   const archive = path.join(backupDir, `${collection}-${stamp}.archive.gz`);
   try {
     execFileSync('mongodump', [
@@ -36,7 +43,7 @@ for (const collection of [config.mongo.messages, config.mongo.leads, config.mong
       `--archive=${archive}`,
       '--gzip',
     ], { stdio: ['ignore', 'ignore', 'pipe'] });
-    console.log(`[ok]   ${collection.padEnd(13)} -> ${archive} (${size(archive)})`);
+    console.log(`[ok]   ${collection.padEnd(15)} -> ${archive} (${size(archive)})`);
   } catch (err) {
     failed = true;
     const detail = err.stderr?.toString().trim().split('\n').pop() || err.message;

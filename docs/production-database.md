@@ -99,6 +99,11 @@ sudo systemctl stop focas-bot
 mongorestore --uri="$MONGODB_URI" --archive=backups/wati_messages-<stamp>.archive.gz --gzip --drop
 mongorestore --uri="$MONGODB_URI" --archive=backups/wati_leads-<stamp>.archive.gz --gzip --drop
 mongorestore --uri="$MONGODB_URI" --archive=backups/wati_feedback-<stamp>.archive.gz --gzip --drop
+# Restore the STOP list first of these - without it the bot would message people who opted out.
+mongorestore --uri="$MONGODB_URI" --archive=backups/wati_optouts-<stamp>.archive.gz --gzip --drop
+mongorestore --uri="$MONGODB_URI" --archive=backups/wati_optins-<stamp>.archive.gz --gzip --drop
+mongorestore --uri="$MONGODB_URI" --archive=backups/wati_campaign-<stamp>.archive.gz --gzip --drop
+mongorestore --uri="$MONGODB_URI" --archive=backups/wati_handovers-<stamp>.archive.gz --gzip --drop
 sudo systemctl start focas-bot
 ```
 

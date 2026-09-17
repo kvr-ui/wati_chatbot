@@ -24,6 +24,10 @@ async function connect() {
       db.collection(config.mongo.optins).createIndex({ waId: 1 }, { unique: true }),
       db.collection(config.mongo.optouts).createIndex({ waId: 1 }, { unique: true }),
       db.collection(config.mongo.campaign).createIndex({ waId: 1 }, { unique: true }),
+      db.collection(config.mongo.handovers).createIndex({ waId: 1 }, { unique: true }),
+      db.collection(config.mongo.webhookEvents).createIndex({ messageId: 1 }, { unique: true }),
+      // WATI retries within minutes; a week of ids is plenty and the collection stays small.
+      db.collection(config.mongo.webhookEvents).createIndex({ createdAt: 1 }, { expireAfterSeconds: 7 * 86_400 }),
     ]);
     console.log(`MongoDB connected: ${config.mongo.dbName}`);
     return connected;
@@ -45,6 +49,8 @@ export const feedback = async () => (await connect()).collection(config.mongo.fe
 export const optins = async () => (await connect()).collection(config.mongo.optins);
 export const optouts = async () => (await connect()).collection(config.mongo.optouts);
 export const campaign = async () => (await connect()).collection(config.mongo.campaign);
+export const handovers = async () => (await connect()).collection(config.mongo.handovers);
+export const webhookEvents = async () => (await connect()).collection(config.mongo.webhookEvents);
 
 export async function closeMongo() {
   const open = client;
