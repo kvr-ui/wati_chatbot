@@ -198,8 +198,11 @@ Browser testing alone does not validate production delivery or human handover op
   loosely (`2`, `grp-2`, `group two`, `both`, `unit 2d` all work); the group is echoed back
   inside the offerings message and saved to the `wati_campaign` collection, so a restart or an
   expired session cannot lose it. An answer that names no group is re-asked once, and after
-  that the lead is let through to normal answering rather than stonewalled. Nobody is asked
-  twice: once a lead has answered, the ad phrase is just another message. The wording lives at
+  that the lead is let through to normal answering rather than stonewalled. A lead who sends the
+  ad phrase again mid-conversation gets a "Welcome back" line with the group on file, not the
+  question. A lead who comes back after `WHATSAPP_OPTIN_HOURS` (48) of silence and sends the
+  phrase starts the script from the top — group question, then pitch — and their earlier pick is
+  kept as `previousGroup`. The wording lives at
   the top of [src/campaign.js](src/campaign.js) — edit `GROUPS`, `GROUP_QUESTION` and
   `groupPitch` there. Note the "less than 3.5 months" line is fixed text and will need editing
   as the exam gets closer. `/health` reports the per-group counts under `campaignGroups`.

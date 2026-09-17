@@ -559,3 +559,34 @@ test('long replies full of emoji are split to fit the URL as well as WhatsApp', 
   for (const part of parts) assert.ok(encodeURIComponent(part).length <= 6000 && part.length <= 4000);
   assert.deepEqual(splitLongText('short'), ['short']);
 });
+
+test('a lead back after 48 hours of silence is asked the group question again; inside the window, welcomed back', async () => {
+  const campaign = (await getDb()).collection(config.mongo.campaign);
+  const hoursAgo = (h) => new Date(Date.now() - h * 60 * 60 * 1000);
+  await campaign.insertMany([
+    { waId: 'preview:returns-late', status: 'answered', group: 'Group 1', name: 'Lead', lastSeenAt: hoursAgo(49) },
+    { waId: 'preview:returns-soon', status: 'answered', group: 'Group 1', name: 'Lead', lastSeenAt: hoursAgo(1) },
+    // Saved before lastSeenAt existed, answered days ago - like the leads already in production.
+    { waId: 'preview:returns-legacy', status: 'answered', group: 'Group 1', name: 'Lead', answeredAt: hoursAgo(120), updatedAt: hoursAgo(120) },
+  ]);
+
+  for (const session of ['returns-late', 'returns-legacy']) {
+    const asked = await post('Your Last Attempt', session);
+    assert.equal(asked.data.meta.reason, 'campaign_group_asked', session);
+    assert.match(asked.data.replies[0], /Which group are you planning/);
+
+    const answered = await post('2', session);
+    assert.equal(answered.data.meta.reason, 'campaign_group_answered');
+    assert.match(answered.data.replies[0], /we offer classes for Group 2/);
+  }
+  const stored = await campaign.findOne({ waId: 'preview:returns-late' });
+  assert.equal(stored.previousGroup, 'Group 1');
+  assert.ok(Date.now() - stored.lastSeenAt.getTime() < 60_000);
+
+  const soon = await post('Your Last Attempt', 'returns-soon');
+  assert.equal(soon.data.meta.reason, 'campaign_returning_lead');
+  assert.match(soon.data.replies[0], /Welcome back/);
+
+  // Having just answered, the phrase again is inside the window: welcomed, not re-asked.
+  assert.equal((await post('Your Last Attempt', 'returns-late')).data.meta.reason, 'campaign_returning_lead');
+});

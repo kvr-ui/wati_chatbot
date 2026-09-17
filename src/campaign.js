@@ -122,6 +122,8 @@ const stateOf = (doc) => ({
   group: doc.group ?? null,
   name: doc.name ?? null,
   askedAt: doc.askedAt ?? doc.startedAt ?? doc.updatedAt ?? null,
+  // State saved before this was tracked falls back to the last time the script moved.
+  lastSeenAt: doc.lastSeenAt ?? doc.answeredAt ?? doc.updatedAt ?? doc.startedAt ?? null,
 });
 
 /**
@@ -161,9 +163,23 @@ async function save(key, patch) {
 
 /* -------------------------------- the flow ----------------------------- */
 
+const windowMs = () => config.whatsappOptInHours * 60 * 60 * 1000;
+const olderThanWindow = (at) => !at || Date.now() - new Date(at).getTime() > windowMs();
+
 /** A question left unanswered this long is dropped: the lead has moved on. */
-const isStale = (state) =>
-  !state.askedAt || Date.now() - new Date(state.askedAt).getTime() > config.whatsappOptInHours * 60 * 60 * 1000;
+const isStale = (state) => olderThanWindow(state.askedAt);
+
+/**
+ * One step of the script, recording that the lead was here. Only a lead the
+ * script already knows is recorded: writing state for everyone would make a
+ * brand-new lead look like a returning one.
+ */
+export async function campaignStep(args) {
+  const result = await step(args);
+  const key = contactKey(args.waId);
+  if (key && memory.has(key)) await save(key, { lastSeenAt: new Date() });
+  return result;
+}
 
 /**
  * One step of the script.
@@ -176,12 +192,28 @@ const isStale = (state) =>
  *   usual way. `answer` asks the caller to also answer the message normally,
  *   before or after these replies, because it carried a question of its own.
  */
-export async function campaignStep({ waId, name = null, text, hasTopic = false }) {
+async function step({ waId, name = null, text, hasTopic = false }) {
   const key = contactKey(waId);
   if (!key) return null;
 
   let state = await getState(key);
   const question = looksLikeQuestion(text);
+
+  // Back after WHATSAPP_OPTIN_HOURS of silence and replying to the ad again: a
+  // fresh start, so the script runs from the top as it would for a new lead.
+  // Inside an active conversation the phrase gets the welcome-back line below.
+  if (state && olderThanWindow(state.lastSeenAt) && matchesUnlockPhrase(text)) {
+    const now = new Date();
+    await save(key, {
+      status: 'awaiting', asked: 1, name: name || state.name, group: null,
+      previousGroup: state.group ?? state.previousGroup ?? null, startedAt: now, askedAt: now,
+    });
+    return {
+      replies: [GROUP_QUESTION],
+      meta: { reason: 'campaign_group_asked', restarted: true },
+      ...(question ? { answer: 'before' } : {}),
+    };
+  }
 
   if (state?.status === 'awaiting' && isStale(state)) {
     state = await save(key, { status: 'unanswered' });
@@ -214,10 +246,10 @@ export async function campaignStep({ waId, name = null, text, hasTopic = false }
     return null;
   }
 
-  // A lead who has been through the script sometimes replies to the ad a second
-  // time. The question is never repeated - but a bare "Jan 2027" carries no
-  // question either, so answer it as the returning lead it is instead of
-  // letting the knowledge base greet them like a stranger.
+  // A lead in an active conversation sometimes replies to the ad a second time.
+  // The question is not repeated - but a bare "Jan 2027" carries no question
+  // either, so answer it as the returning lead it is instead of letting the
+  // knowledge base greet them like a stranger.
   if (state && isBareUnlockPhrase(text)) {
     return {
       replies: [returningWelcome({ name: name || state.name, group: state.group })],
@@ -225,8 +257,8 @@ export async function campaignStep({ waId, name = null, text, hasTopic = false }
     };
   }
 
-  // Only an untouched lead starts the script, so a lead who answered once (or
-  // was let through) is never asked again, however often the ad phrase recurs.
+  // An untouched lead starts the script. A lead who answered (or was let through)
+  // is only asked again after going quiet for the whole window, above.
   if (!state && matchesUnlockPhrase(text)) {
     const now = new Date();
     await save(key, { status: 'awaiting', asked: 1, name, group: null, startedAt: now, askedAt: now });
