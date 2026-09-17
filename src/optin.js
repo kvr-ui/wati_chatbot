@@ -17,14 +17,20 @@ const optedIn = new Set();
 /** Lowercase and punctuation-free, so "Jan-2027!" and "JAN  2027" match alike. */
 const normalize = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** True when a message carries one of the configured campaign phrases. */
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * True when a message carries one of the configured campaign phrases, as whole
+ * words. "Your last attempt kit" is a product name, not the ad: a lead asking
+ * what is inside the kit must get an answer, not the campaign question.
+ */
 export function matchesUnlockPhrase(text) {
   const haystack = normalize(text);
   if (!haystack) return false;
   return config.whatsappUnlockPhrases
     .map(normalize)
     .filter(Boolean)
-    .some((phrase) => haystack.includes(phrase));
+    .some((phrase) => new RegExp(`(^| )${escapeRe(phrase)}(?! kit)( |$)`).test(haystack));
 }
 
 /**

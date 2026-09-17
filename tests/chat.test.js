@@ -220,6 +220,9 @@ test('the campaign phrase opts in one lead at a time and survives a restart', as
   assert.ok(matchesUnlockPhrase('interested in January 2027'));
   assert.ok(!matchesUnlockPhrase('what are the fees'));
   assert.ok(!matchesUnlockPhrase('is the jan 2026 batch still open'));
+  assert.ok(matchesUnlockPhrase('YOUR LAST ATTEMPT'));
+  assert.ok(matchesUnlockPhrase('Hi! Your Last Attempt - tell me more'));
+  assert.ok(!matchesUnlockPhrase('what is inside your last attempt kit?'));
 
   const lead = '919000000001';
   const other = '919000000002';
@@ -236,7 +239,7 @@ test('the campaign phrase opts in one lead at a time and survives a restart', as
   assert.ok((await loadOptIns()) >= 1);
 
   const health = await (await fetch(`${base}/health`)).json();
-  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027']);
+  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt']);
   assert.equal(typeof health.whatsappOptIns, 'number');
   assert.ok(!JSON.stringify(health).includes(lead)); // real numbers stay out of /health
 });
@@ -363,4 +366,18 @@ test('a lead who replies STOP gets no reply, now or ever, even after a restart',
   // Only the playground reset lifts it, so testers can run the chat again.
   assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
   assert.notEqual((await post('what are the fees?', session)).data.meta.reason, 'opted_out');
+});
+
+test('the "Your Last Attempt" ad starts the same group question as Jan 2027', async () => {
+  const session = 'last-attempt';
+  const asked = await post('YOUR LAST ATTEMPT', session);
+  assert.equal(asked.data.meta.reason, 'campaign_group_asked');
+  assert.match(asked.data.replies[0], /Which group are you planning/);
+
+  const answered = await post('1', session);
+  assert.equal(answered.data.meta.reason, 'campaign_group_answered');
+  assert.match(answered.data.replies[0], /we offer classes for Group 1/);
+
+  // Asking about the kit by name is a question, not the ad.
+  assert.notEqual((await post('what is in your last attempt kit?', 'kit-question')).data.meta.reason, 'campaign_group_asked');
 });

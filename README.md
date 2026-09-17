@@ -180,13 +180,14 @@ Browser testing alone does not validate production delivery or human handover op
 - **Who the bot answers.** While `WHATSAPP_ALLOWED_NUMBERS` is set, the bot replies only to
   those numbers and ignores every other contact. Any other lead can unlock the bot *for its
   own number only* by sending the campaign phrase in `WHATSAPP_UNLOCK_PHRASE`
-  (default `jan 2027, january 2027`, matched anywhere in the message, ignoring case and
-  punctuation). That message is answered and the number is saved to the `wati_optins`
+  (default `jan 2027, january 2027, your last attempt`, matched as whole words anywhere in the
+  message, ignoring case and punctuation; "your last attempt kit" is a kit question and does not
+  count). That message is answered and the number is saved to the `wati_optins`
   collection, so the bot keeps talking to that one lead after a restart — and still to nobody
   else. Remove its document from `wati_optins` and restart to lock a number again; set
   `WHATSAPP_UNLOCK_PHRASE=` empty to disable opt-in entirely. With `WHATSAPP_ALLOWED_NUMBERS`
   blank the bot answers everyone and the phrase is irrelevant.
-- **The January 2027 campaign script.** A lead arriving from the ad is asked one qualifying
+- **The January 2027 campaign script.** A lead arriving from either ad ("Jan 2027" or "Your Last Attempt") is asked one qualifying
   question before anything else: *"Which group are you planning to take the exam in January
   2027?"*, with the four options numbered (Group 1 / Group 2 / Both Groups / Unit 2D). Their
   first message is **not** answered otherwise — the question comes alone. The reply is matched
