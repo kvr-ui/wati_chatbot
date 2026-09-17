@@ -89,7 +89,7 @@ Re-run that (or `curl -X POST localhost:3000/reindex`) whenever you edit knowled
 | Field | Meaning |
 |---|---|
 | `match` | `exact` (whole message), `starts_with`, `contains` (whole word anywhere), `regex` |
-| `action` | `reply` = send `reply` text · `ai` = answer from the knowledge base · `handover` = pause the bot for a human · `resume` = un-pause it |
+| `action` | `reply` = send `reply` text · `ai` = answer from the knowledge base · `handover` = pause the bot for a human · `resume` = un-pause it · `optout` = never answer this contact again |
 | `reply` | Text to send. Accepts `{{name}}` and `{{bot}}`. May be an array to send several messages. |
 | `kbFilter` | Only search knowledge sections whose heading/filename contains this word |
 | `prompt` | Extra instruction passed to the model for this topic |
@@ -170,7 +170,7 @@ Browser testing alone does not validate production delivery or human handover op
 | POST | `/simulate` | `{ "text": "..." }` → the reply, without sending anything to WhatsApp |
 | GET | `/match?text=...` | Which trigger a phrase hits |
 | POST | `/reindex` | Re-embed the knowledge base after editing files |
-| GET | `/health` | Index size, trigger count, active sessions, allowlist, opt-in and campaign-group counts |
+| GET | `/health` | Index size, trigger count, active sessions, allowlist, opt-in, opt-out and campaign-group counts |
 
 ## How it behaves
 
@@ -208,6 +208,11 @@ Browser testing alone does not validate production delivery or human handover op
   the price and is hesitating — never as an opening offer. **If you edit either file, keep it
   under the 900-character `chunkSize`**: a longer file is split, and the offer can then be
   retrieved without the rule attached. A test guards this.
+- **STOP.** A lead who sends just `stop`, `unsubscribe` or `opt out` gets no reply, and the
+  bot never answers that number again — whatever they send later, the campaign phrase and `bot`
+  included. The number is saved to the `wati_optouts` collection, so a restart does not forget
+  it. Remove its document from `wati_optouts` and restart to let the bot talk to them again.
+  `/health` reports the count under `whatsappOptOuts`.
 - **Human handover.** After a `handover` trigger the bot stays silent for
   `HANDOVER_PAUSE_MINUTES` (default 60) so your agent can take the chat. The customer typing
   `bot` brings it back.

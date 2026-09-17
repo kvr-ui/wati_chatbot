@@ -22,6 +22,7 @@ async function connect() {
       db.collection(config.mongo.leads).createIndex({ score: -1, lastSeen: -1 }),
       db.collection(config.mongo.feedback).createIndex({ createdAt: -1 }),
       db.collection(config.mongo.optins).createIndex({ waId: 1 }, { unique: true }),
+      db.collection(config.mongo.optouts).createIndex({ waId: 1 }, { unique: true }),
       db.collection(config.mongo.campaign).createIndex({ waId: 1 }, { unique: true }),
     ]);
     console.log(`MongoDB connected: ${config.mongo.dbName}`);
@@ -42,6 +43,7 @@ export const messages = async () => (await connect()).collection(config.mongo.me
 export const leads = async () => (await connect()).collection(config.mongo.leads);
 export const feedback = async () => (await connect()).collection(config.mongo.feedback);
 export const optins = async () => (await connect()).collection(config.mongo.optins);
+export const optouts = async () => (await connect()).collection(config.mongo.optouts);
 export const campaign = async () => (await connect()).collection(config.mongo.campaign);
 
 export async function closeMongo() {

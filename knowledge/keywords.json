@@ -475,8 +475,7 @@
         "unsubscribe",
         "opt out"
       ],
-      "action": "handover",
-      "reply": "Understood — I've stopped automated replies. Our team will follow up if needed."
+      "action": "optout"
     }
   ]
 }

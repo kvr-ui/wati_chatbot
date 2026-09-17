@@ -7,6 +7,7 @@ import { ensureIndex, indexStats, buildChunks } from './kb.js';
 import { isNewMessage, deleteSession, stats as sessionStats } from './sessions.js';
 import { matchTrigger, listTriggerIds } from './keywords.js';
 import { matchesUnlockPhrase, isOptedIn, optIn, optInCount } from './optin.js';
+import { optOutCount, resetOptOut } from './optout.js';
 import { groupCounts, resetCampaign } from './campaign.js';
 import { listFeedback, saveFeedback } from './feedback.js';
 import {
@@ -154,6 +155,7 @@ app.get('/health', async (_req, res) => {
     whatsappUnlockPhrases: config.whatsappUnlockPhrases,
     // A count only: opted-in numbers are real customers, and /health has no login.
     whatsappOptIns: optInCount(),
+    whatsappOptOuts: optOutCount(),
     campaignGroups: groupCounts(),
     kb: indexStats(),
     triggers: listTriggerIds().length,
@@ -201,6 +203,7 @@ app.delete('/api/chat/:sessionId', async (req, res) => {
   deleteSession(`preview:${id}`);
   // Also forget the campaign script, so a tester can run it from the top again.
   await resetCampaign(`preview:${id}`);
+  await resetOptOut(`preview:${id}`);
   res.json({ ok: true });
 });
 

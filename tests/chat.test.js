@@ -335,3 +335,32 @@ test('the installment offer never travels without its no-amounts rule', async ()
   assert.equal(trigger.id, 'fees');
   assert.match(trigger.prompt, /Never state, split or confirm an installment amount/);
 });
+
+test('a lead who replies STOP gets no reply, now or ever, even after a restart', async () => {
+  const session = 'stopped';
+  // Mid-campaign too: STOP must not be read as an unclear group answer and re-asked.
+  assert.equal((await post('jan 2027', session)).data.meta.reason, 'campaign_group_asked');
+
+  const count = calls.length;
+  const stop = await post('STOP', session);
+  assert.deepEqual(stop.data.replies, []);
+  assert.equal(stop.data.meta.reason, 'opted_out');
+
+  for (const text of ['what are the fees?', 'bot', 'Jan 2027', 'hello']) {
+    const later = await post(text, session);
+    assert.deepEqual(later.data.replies, [], `"${text}" was answered after STOP`);
+    assert.equal(later.data.meta.reason, 'opted_out');
+  }
+  assert.equal(calls.length, count, 'the model was called for an opted-out lead');
+
+  // Stored, so the in-memory list is not the only record.
+  const stored = await (await getDb()).collection(config.mongo.optouts).findOne({ waId: `preview:${session}` });
+  assert.equal(stored.text, 'STOP');
+
+  // "stop" inside a real question is not an opt-out.
+  assert.notEqual((await post('which bus stop is near the centre?', 'not-stopped')).data.meta.reason, 'opted_out');
+
+  // Only the playground reset lifts it, so testers can run the chat again.
+  assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
+  assert.notEqual((await post('what are the fees?', session)).data.meta.reason, 'opted_out');
+});

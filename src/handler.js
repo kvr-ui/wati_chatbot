@@ -4,6 +4,7 @@ import { answer, renderTemplate } from './ai.js';
 import { getSession, remember, pauseForHandover, isPaused, resume } from './sessions.js';
 import { logTurn } from './conversations.js';
 import { campaignStep } from './campaign.js';
+import { isOptedOut, optOut } from './optout.js';
 
 /**
  * Core bot brain. Transport-agnostic so both the WATI webhook and the
@@ -36,6 +37,9 @@ async function route({ waId, name, text, type = 'text' }) {
   const session = getSession(waId, name);
   const vars = { name: session.name || 'there', bot: config.bot.name };
 
+  // A lead who replied STOP is never answered again, whatever they send.
+  if (await isOptedOut(waId)) return { replies: [], meta: { reason: 'opted_out' } };
+
   if (type !== 'text' || !text?.trim()) {
     return {
       replies: ['I can only read text messages right now. Please type your question.'],
@@ -44,6 +48,13 @@ async function route({ waId, name, text, type = 'text' }) {
   }
 
   const trigger = matchTrigger(text);
+
+  // STOP itself gets no reply either. Checked before the pause and the campaign
+  // script, which would otherwise read it as an unclear group answer and re-ask.
+  if (trigger?.action === 'optout') {
+    await optOut(waId, { name: session.name, text });
+    return { replies: [], meta: { trigger: trigger.id, reason: 'opted_out' } };
+  }
 
   // A human agent has taken over: stay silent unless explicitly asked to resume.
   if (isPaused(session)) {

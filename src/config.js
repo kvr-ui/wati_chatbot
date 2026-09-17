@@ -98,6 +98,7 @@ export const config = {
     leads: process.env.MONGODB_LEADS_COLLECTION || 'wati_leads',
     feedback: process.env.MONGODB_FEEDBACK_COLLECTION || 'wati_feedback',
     optins: process.env.MONGODB_OPTINS_COLLECTION || 'wati_optins',
+    optouts: process.env.MONGODB_OPTOUTS_COLLECTION || 'wati_optouts',
     campaign: process.env.MONGODB_CAMPAIGN_COLLECTION || 'wati_campaign',
   },
 };

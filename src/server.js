@@ -2,6 +2,7 @@ import { app } from './app.js';
 import { config } from './config.js';
 import { ensureIndex } from './kb.js';
 import { loadOptIns } from './optin.js';
+import { loadOptOuts } from './optout.js';
 import { loadCampaignState } from './campaign.js';
 
 app.listen(config.port, config.host, () => {
@@ -14,6 +15,7 @@ app.listen(config.port, config.host, () => {
         ? `Replying ONLY to: ${allowed.join(', ')} (WHATSAPP_ALLOWED_NUMBERS)`
         : 'WARNING: replying to ALL inbound WhatsApp messages, including real customers.'
     );
+    loadOptOuts().then((count) => console.log(`STOP: ${count} lead(s) opted out and will not be answered`));
 
     const phrases = config.whatsappUnlockPhrases;
     if (allowed.length && phrases.length) {
