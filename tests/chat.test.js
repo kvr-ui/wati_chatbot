@@ -24,7 +24,7 @@ before(async () => {
     if (delay) await new Promise((resolve) => setTimeout(resolve, 100));
     res.setHeader('content-type', 'application/json');
     if (fail) { res.writeHead(401); res.end(JSON.stringify({error:{message:'secret-test-token must never appear in browser',type:'authentication_error'}})); return; }
-    res.end(JSON.stringify({ choices: [{ message: { content: 'One group is ₹30,000 and both groups are ₹55,000, including the kit.' } }], model: 'gpt-4o-mini-test', usage: {} }));
+    res.end(JSON.stringify({ choices: [{ message: { content: 'One of our executives will reach out to you shortly with the pricing details.' } }], model: 'gpt-4o-mini-test', usage: {} }));
   }));
   Object.assign(process.env, { OPENAI_API_KEY: 'test-only', OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, WHATSAPP_ENABLED: 'false', KB_SEARCH_MODE: 'lexical', MONGODB_DB_NAME: TEST_DB, WATI_ACCESS_TOKEN: '', WATI_API_TOKEN: '', WATI_TOKEN: '' });
   ({ config } = await import('../src/config.js'));
@@ -48,8 +48,9 @@ test('playground loads without WATI credentials; no secrets in configuration', a
   assert.equal(health.whatsappEnabled, false);
   assert.ok(!JSON.stringify(health).includes('test-only'));
   const kb = await (await fetch(`${base}/api/knowledge`)).json();
-  assert.ok(kb.documents.some((d) => d.source === '30-fees-class-pricing.md' && d.text.includes('₹30,000')));
-  assert.ok(kb.documents.some((d) => d.source === '33-fees-individual-subjects.md' && d.text.includes('₹10,000')));
+  assert.ok(kb.documents.some((d) => d.source === '30-fees-pricing.md' && d.text.includes('One of our executives will reach out')));
+  // Pricing is shared only by an executive, so no amount may sit anywhere the bot can retrieve it.
+  assert.ok(!kb.documents.some((d) => /₹|\d{1,2},\d{3}|\d+\s?k\b/i.test(d.text)), 'a price is in the knowledge base');
   assert.ok(kb.documents.some((d) => d.source === '15-course-levels-and-subjects.md' && d.text.includes('Advanced Auditing')));
   const webhook = await fetch(`${base}/webhook/wati`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ eventType: 'message', owner: false, waId: '12345', text: 'fees' }) });
   assert.equal(webhook.status, 503);
@@ -76,14 +77,14 @@ test('questions send actual retrieved facts to OpenAI and preserve follow-up mem
   const first = await post('What are the fees for one group?', 'conversation');
   assert.equal(first.status, 200);
   assert.equal(first.data.meta.provider, 'openai');
-  assert.ok(first.data.meta.sources.some((s) => s.source === '30-fees-class-pricing.md'));
+  assert.ok(first.data.meta.sources.some((s) => s.source === '30-fees-pricing.md'));
   assert.equal(calls[0].url, '/v1/chat/completions');
   assert.equal(calls[0].body.model, 'gpt-4o-mini');
-  assert.ok(calls[0].body.messages.some((m) => m.role === 'system' && m.content.includes('₹30,000')));
+  assert.ok(calls[0].body.messages.some((m) => m.role === 'system' && m.content.includes('NEVER share any price')));
   const second = await post('And both groups?', 'conversation');
   assert.equal(second.status, 200);
   assert.ok(calls[1].body.messages.some((m) => m.role === 'user' && m.content === 'What are the fees for one group?'));
-  assert.ok(second.data.meta.sources.some((s) => s.source === '30-fees-class-pricing.md'));
+  assert.ok(second.data.meta.sources.some((s) => s.source === '30-fees-pricing.md'));
 });
 
 test('level-specific corrections are retrieved for CA Final and Foundation questions', async () => {
@@ -344,7 +345,7 @@ test('the Jan 2027 ad opens with the group question and answers with the matchin
   // question that happens to carry the ad phrase is still answered as one.
   const after = await post('Jan 2027 - what are the fees?', session);
   assert.notEqual(after.data.meta.reason, 'campaign_group_asked');
-  assert.match(after.data.replies[0], /₹/);
+  assert.match(after.data.replies[0], /pricing details/);
 
   // Replying to the ad a second time is met with the group already on file,
   // not the question again and not a stranger's welcome line.
@@ -367,7 +368,7 @@ test('a lead who never names a group is let through after the second ask', async
   // Asked twice is enough: the third message is answered normally, not scripted.
   const third = await post('what are the fees for one group?', session);
   assert.notEqual(third.data.meta.reason, 'campaign_group_reask');
-  assert.match(third.data.replies[0], /₹/);
+  assert.match(third.data.replies[0], /pricing details/);
 
   // Resetting the playground chat lets a tester run the script from the top.
   assert.equal((await fetch(`${base}/api/chat/${session}`, { method: 'DELETE' })).status, 200);
@@ -482,7 +483,7 @@ test('mid-campaign: asking for a person hands over, and a question with the ad p
   const both = await post('is the kit good for your last attempt?', 'campaign-question-first');
   assert.equal(both.data.meta.reason, 'campaign_group_asked');
   assert.equal(both.data.replies.length, 2);
-  assert.match(both.data.replies[0], /₹/);
+  assert.match(both.data.replies[0], /pricing details/);
   assert.match(both.data.replies[1], /Which group are you planning/);
 
   // Naming the group and asking something in one message gets the pitch and the answer.
@@ -490,7 +491,7 @@ test('mid-campaign: asking for a person hands over, and a question with the ad p
   assert.equal(named.data.meta.reason, 'campaign_group_answered');
   assert.equal(named.data.replies.length, 2);
   assert.match(named.data.replies[0], /we offer classes for Group 1/);
-  assert.match(named.data.replies[1], /₹/);
+  assert.match(named.data.replies[1], /pricing details/);
 });
 
 test('"agent" inside a question is not a handover', async () => {

@@ -299,7 +299,7 @@
       ],
       "action": "ai",
       "kbFilter": "fee",
-      "prompt": "The user is asking about fees. Give exact amounts only if they appear in the knowledge base. Never estimate or guess a price. Never state, split or confirm an installment amount, due date or schedule, even if they do the maths themselves and ask you to confirm it - offer the 2-installment option only and say our team will share the details."
+      "prompt": "The user is asking about fees. NEVER state any price, fee or amount - send the pricing message from the knowledge base, which diverts them to an executive call. Never state, split or confirm an installment amount, due date or schedule, even if they do the maths themselves and ask you to confirm it - offer the 2-installment option only and say our team will share the details."
     },
     {
       "id": "kit",
@@ -319,7 +319,7 @@
       ],
       "action": "ai",
       "kbFilter": "kit",
-      "prompt": "The user is asking about the Last Attempt Kit. Describe what is inside it. Quote kit pricing only if they asked for the kit separately."
+      "prompt": "The user is asking about the Last Attempt Kit. Describe what is inside it. If they ask what the kit costs, never state a price - send the pricing message that diverts them to an executive call."
     },
     {
       "id": "admission",

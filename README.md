@@ -53,7 +53,7 @@ with keyword search over the same files if embeddings are unavailable. Set
 
 Everything the bot is allowed to say lives in [knowledge/](knowledge/).
 
-- One `.md` file per topic — `30-fees-class-pricing.md`, `20-timings-and-slots.md`, and so on.
+- One `.md` file per topic — `30-fees-pricing.md`, `20-timings-and-slots.md`, and so on.
   Each file is one searchable chunk, so you edit one small file to change one answer.
   See [docs/knowledge-base-guide.md](docs/knowledge-base-guide.md) for the format and the rules.
 - [knowledge/keywords.json](knowledge/keywords.json) — the keyword triggers.

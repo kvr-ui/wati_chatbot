@@ -8,16 +8,15 @@ Anything you drop into `knowledge/` is indexed, so notes for humans go in `docs/
 ## The shape of a file
 
 ```markdown
-# Fees — Class Pricing
+# Fees — Pricing for Classes, the Kit and Subjects
 
 Also asked as: फीस, शुल्क, कीमत, கட்டணம், விலை.
 
 Asked as: fee, fees, price, cost, how much, kitna, ...
 
-One full group (Group 1 or Group 2), kit included: ₹30,000.
-Both groups, kit included: ₹55,000.
+NEVER share any price, fee, amount or range. Only divert to an executive call.
 
-Send: Our classes are ₹30,000 for one group and ₹55,000 for both groups ...
+Send: One of our executives will reach out to you shortly with the pricing details ...
 ```
 
 | Part | What it does |
@@ -48,7 +47,7 @@ Send: Our classes are ₹30,000 for one group and ₹55,000 for both groups ...
    | brochure | `brochure` |
    | objections | `objection` |
 
-   Rename freely otherwise — `30-fees-class-pricing.md` can become `fees-for-classes.md`.
+   Rename freely otherwise — `30-fees-pricing.md` can become `fees.md`.
 3. **Never state something we don't publish.** If a fact isn't in these files, the file should
    say so and hand over to the team, the way `60-location-and-address.md` does. That is what
    stops the bot inventing an address, a tutor's qualifications or a placement record.
@@ -70,7 +69,8 @@ comments are stripped before indexing, so the marker only tells `check:kb` not t
 - `00` — who we are and how we speak
 - `10`–`14` — courses: overview, why we're different, how tutors teach, faculty questions
 - `20` — class timings and slots
-- `30`–`32` — fees: class pricing, kit pricing, discounts and installments
+- `30`, `32`, `34` — fees: pricing (diverts to an executive, never quotes a price), discounts
+  and installments, the installment close
 - `40` — what's inside the Last Attempt Kit
 - `50` — admission and joining
 - `60`–`62` — location, contact, placement (all hand over to the team)
