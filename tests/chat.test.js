@@ -243,7 +243,7 @@ test('the campaign phrase opts in one lead at a time and survives a restart', as
   assert.ok((await loadOptIns()) >= 1);
 
   const health = await (await fetch(`${base}/health`)).json();
-  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt', 'join now']);
+  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt', 'join now', 'start your prep']);
   assert.equal(typeof health.whatsappOptIns, 'number');
   assert.equal(health.whatsappOptInHours, 48);
   assert.ok(!JSON.stringify(health).includes(lead)); // real numbers stay out of /health
@@ -448,6 +448,17 @@ test('the "Your Last Attempt" ad starts the same group question as Jan 2027', as
 
   // Asking about the kit by name is a question, not the ad.
   assert.notEqual((await post('what is in your last attempt kit?', 'kit-question')).data.meta.reason, 'campaign_group_asked');
+});
+
+test('the "Start Your Prep" ad starts the same group question', async () => {
+  const session = 'start-your-prep';
+  const asked = await post('START YOUR PREP', session);
+  assert.equal(asked.data.meta.reason, 'campaign_group_asked');
+  assert.match(asked.data.replies[0], /Which group are you planning/);
+
+  const answered = await post('unit 2d', session);
+  assert.equal(answered.data.meta.reason, 'campaign_group_answered');
+  assert.match(answered.data.replies[0], /we offer classes for Unit 2D/);
 });
 
 test('the "Join Now" ad starts the same group question', async () => {
