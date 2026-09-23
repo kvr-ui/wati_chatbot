@@ -13,6 +13,7 @@
     "check:wati": "node scripts/check-wati.js",
     "check:ai": "node scripts/check-ai.js",
     "backup": "node scripts/backup-db.js",
+    "reset-lead": "node scripts/reset-lead.js",
     "test": "node --test"
   },
   "engines": {
