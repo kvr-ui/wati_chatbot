@@ -47,10 +47,10 @@ export const config = {
   // numbers and ignores everyone else. Leave blank to reply to all contacts.
   whatsappAllowedNumbers: digitList(process.env.WHATSAPP_ALLOWED_NUMBERS),
   // Campaign opt-in. A contact outside the allowlist that sends one of these
-  // phrases (the "Jan 2027" or "Your Last Attempt" ad message) unlocks the bot for itself alone;
+  // phrases (the "Jan 2027", "Your Last Attempt" or "Join Now" ad message) unlocks the bot for itself alone;
   // everybody else stays ignored. Set WHATSAPP_UNLOCK_PHRASE empty to disable
   // it and leave the allowlist as the only way in.
-  whatsappUnlockPhrases: phraseList(process.env.WHATSAPP_UNLOCK_PHRASE ?? 'jan 2027, january 2027, your last attempt'),
+  whatsappUnlockPhrases: phraseList(process.env.WHATSAPP_UNLOCK_PHRASE ?? 'jan 2027, january 2027, your last attempt, join now'),
   // How long an opted-in lead may stay silent before the bot turns off for them.
   // Every message they send restarts it; so does sending the phrase again once it has closed.
   whatsappOptInHours: num(process.env.WHATSAPP_OPTIN_HOURS, 48),

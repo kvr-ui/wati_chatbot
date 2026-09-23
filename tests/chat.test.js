@@ -243,7 +243,7 @@ test('the campaign phrase opts in one lead at a time and survives a restart', as
   assert.ok((await loadOptIns()) >= 1);
 
   const health = await (await fetch(`${base}/health`)).json();
-  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt']);
+  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt', 'join now']);
   assert.equal(typeof health.whatsappOptIns, 'number');
   assert.equal(health.whatsappOptInHours, 48);
   assert.ok(!JSON.stringify(health).includes(lead)); // real numbers stay out of /health
@@ -448,6 +448,23 @@ test('the "Your Last Attempt" ad starts the same group question as Jan 2027', as
 
   // Asking about the kit by name is a question, not the ad.
   assert.notEqual((await post('what is in your last attempt kit?', 'kit-question')).data.meta.reason, 'campaign_group_asked');
+});
+
+test('the "Join Now" ad starts the same group question', async () => {
+  const session = 'join-now';
+  const asked = await post('JOIN NOW', session);
+  assert.equal(asked.data.meta.reason, 'campaign_group_asked');
+  assert.match(asked.data.replies[0], /Which group are you planning/);
+
+  const answered = await post('both', session);
+  assert.equal(answered.data.meta.reason, 'campaign_group_answered');
+  assert.match(answered.data.replies[0], /we offer classes for Both Groups/);
+
+  // "Join now - what are the fees?" is the ad plus a real question: both get answered.
+  const withQuestion = await post('join now, what are the fees?', 'join-now-question');
+  assert.equal(withQuestion.data.meta.reason, 'campaign_group_asked');
+  assert.match(withQuestion.data.replies.at(-1), /Which group are you planning/);
+  assert.ok(withQuestion.data.replies.length > 1, 'the question of their own went unanswered');
 });
 
 test('a WhatsApp STOP is stored as digits, so any spelling of the number stays silenced', async () => {
