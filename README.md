@@ -180,7 +180,7 @@ Browser testing alone does not validate production delivery or human handover op
 - **Who the bot answers.** While `WHATSAPP_ALLOWED_NUMBERS` is set, the bot replies only to
   those numbers and ignores every other contact. Any other lead can unlock the bot *for its
   own number only* by sending the campaign phrase in `WHATSAPP_UNLOCK_PHRASE`
-  (default `jan 2027, january 2027, your last attempt, join now, start your prep, registered with icai, =yes`, matched as whole words anywhere in the
+  (default `jan 2027, january 2027, your last attempt, join now, start your prep, registered with icai, start small, study effectively, =yes`, matched as whole words anywhere in the
   message, ignoring case and punctuation; "your last attempt kit" is a kit question and does not
   count; a phrase written with a leading `=` counts only when it is the whole message, so `=yes`
   starts the bot for a bare "Yes" but not for "yes I'll pay tomorrow"). That message is answered and the bot keeps talking to that one lead — and still to
@@ -192,7 +192,7 @@ Browser testing alone does not validate production delivery or human handover op
   to lock a number early; set
   `WHATSAPP_UNLOCK_PHRASE=` empty to disable opt-in entirely. With `WHATSAPP_ALLOWED_NUMBERS`
   blank the bot answers everyone and the phrase is irrelevant.
-- **The January 2027 campaign script.** A lead arriving from any of the ads ("Jan 2027", "Your Last Attempt", "Join Now", "Start Your Prep", "Registered with ICAI" or a bare "Yes") is asked one qualifying
+- **The January 2027 campaign script.** A lead arriving from any of the ads ("Jan 2027", "Your Last Attempt", "Join Now", "Start Your Prep", "Registered with ICAI", "Start Small", "Study Effectively" or a bare "Yes") is asked one qualifying
   question before anything else: *"Which group are you planning to take the exam in January
   2027?"*, with the four options numbered (Group 1 / Group 2 / Both Groups / Unit 2D). Their
   first message is **not** answered otherwise — the question comes alone. The reply is matched
