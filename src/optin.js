@@ -29,6 +29,16 @@ const normalize = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
+ * The configured phrases. One written with a leading "=" ("=yes") counts only
+ * when it is the whole message: a word as common as "yes" found anywhere would
+ * unlock the bot for anyone saying "yes I'll pay tomorrow" to a staff member.
+ */
+const unlockPhrases = () =>
+  config.whatsappUnlockPhrases
+    .map((p) => ({ exact: p.startsWith('='), phrase: normalize(p) }))
+    .filter((p) => p.phrase);
+
+/**
  * True when a message carries one of the configured campaign phrases, as whole
  * words. "Your last attempt kit" is a product name, not the ad: a lead asking
  * what is inside the kit must get an answer, not the campaign question.
@@ -36,24 +46,22 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function matchesUnlockPhrase(text) {
   const haystack = normalize(text);
   if (!haystack) return false;
-  return config.whatsappUnlockPhrases
-    .map(normalize)
-    .filter(Boolean)
-    .some((phrase) => new RegExp(`(^| )${escapeRe(phrase)}(?! kit)( |$)`).test(haystack));
+  return unlockPhrases().some(({ exact, phrase }) =>
+    exact ? haystack === phrase : new RegExp(`(^| )${escapeRe(phrase)}(?! kit)( |$)`).test(haystack)
+  );
 }
 
 /**
  * True when the message is nothing *but* a campaign phrase - the bare reply to
  * the ad, with no question attached. "Jan 2027 - what are the fees?" carries a
  * real question and must be answered as one, so it is deliberately excluded.
+ * Exact-only phrases never count: a lead already talking to the bot who says
+ * "yes" is answering it, not replying to the ad again.
  */
 export function isBareUnlockPhrase(text) {
   const haystack = normalize(text);
   if (!haystack) return false;
-  return config.whatsappUnlockPhrases
-    .map(normalize)
-    .filter(Boolean)
-    .some((phrase) => haystack === phrase);
+  return unlockPhrases().some(({ exact, phrase }) => !exact && haystack === phrase);
 }
 
 /**

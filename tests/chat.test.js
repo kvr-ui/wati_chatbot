@@ -243,7 +243,7 @@ test('the campaign phrase opts in one lead at a time and survives a restart', as
   assert.ok((await loadOptIns()) >= 1);
 
   const health = await (await fetch(`${base}/health`)).json();
-  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt', 'join now', 'start your prep', 'registered with icai']);
+  assert.deepEqual(health.whatsappUnlockPhrases, ['jan 2027', 'january 2027', 'your last attempt', 'join now', 'start your prep', 'registered with icai', '=yes']);
   assert.equal(typeof health.whatsappOptIns, 'number');
   assert.equal(health.whatsappOptInHours, 48);
   assert.ok(!JSON.stringify(health).includes(lead)); // real numbers stay out of /health
@@ -470,6 +470,21 @@ test('the "Registered with ICAI" ad starts the same group question', async () =>
   const answered = await post('2', session);
   assert.equal(answered.data.meta.reason, 'campaign_group_answered');
   assert.match(answered.data.replies[0], /we offer classes for Group 2/);
+});
+
+test('a bare "Yes" starts the group question, but "yes" inside a sentence does not', async () => {
+  const session = 'bare-yes';
+  const asked = await post('Yes!', session);
+  assert.equal(asked.data.meta.reason, 'campaign_group_asked');
+  assert.match(asked.data.replies[0], /Which group are you planning/);
+
+  const answered = await post('group 1', session);
+  assert.equal(answered.data.meta.reason, 'campaign_group_answered');
+
+  // Mid-conversation, "yes" is an answer to the bot, not the ad again.
+  assert.notEqual((await post('yes', session)).data.meta.reason, 'campaign_returning_lead');
+
+  assert.notEqual((await post("yes I'll pay tomorrow", 'yes-in-sentence')).data.meta.reason, 'campaign_group_asked');
 });
 
 test('the "Join Now" ad starts the same group question', async () => {
