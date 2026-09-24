@@ -180,7 +180,7 @@ Browser testing alone does not validate production delivery or human handover op
 - **Who the bot answers.** While `WHATSAPP_ALLOWED_NUMBERS` is set, the bot replies only to
   those numbers and ignores every other contact. Any other lead can unlock the bot *for its
   own number only* by sending the campaign phrase in `WHATSAPP_UNLOCK_PHRASE`
-  (default `jan 2027, january 2027, your last attempt, join now, start your prep`, matched as whole words anywhere in the
+  (default `jan 2027, january 2027, your last attempt, join now, start your prep, registered with icai`, matched as whole words anywhere in the
   message, ignoring case and punctuation; "your last attempt kit" is a kit question and does not
   count). That message is answered and the bot keeps talking to that one lead — and still to
   nobody else — until the lead has been silent for `WHATSAPP_OPTIN_HOURS` (default 48). Every
@@ -191,7 +191,7 @@ Browser testing alone does not validate production delivery or human handover op
   to lock a number early; set
   `WHATSAPP_UNLOCK_PHRASE=` empty to disable opt-in entirely. With `WHATSAPP_ALLOWED_NUMBERS`
   blank the bot answers everyone and the phrase is irrelevant.
-- **The January 2027 campaign script.** A lead arriving from any of the ads ("Jan 2027", "Your Last Attempt", "Join Now" or "Start Your Prep") is asked one qualifying
+- **The January 2027 campaign script.** A lead arriving from any of the ads ("Jan 2027", "Your Last Attempt", "Join Now", "Start Your Prep" or "Registered with ICAI") is asked one qualifying
   question before anything else: *"Which group are you planning to take the exam in January
   2027?"*, with the four options numbered (Group 1 / Group 2 / Both Groups / Unit 2D). Their
   first message is **not** answered otherwise — the question comes alone. The reply is matched
