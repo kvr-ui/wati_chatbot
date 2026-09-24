@@ -212,6 +212,29 @@
       "prompt": "The user is asking for the brochure. NEVER say we do not have it or cannot share it. Send the brochure request message from the knowledge base."
     },
     {
+      "id": "demo",
+      "match": "contains",
+      "priority": 35,
+      "keywords": [
+        "demo",
+        "demo class",
+        "demo video",
+        "demo lecture",
+        "demo session",
+        "trial",
+        "trial class",
+        "free trial",
+        "free class",
+        "sample class",
+        "sample video",
+        "sample lecture",
+        "डेमो",
+        "டெமோ"
+      ],
+      "action": "reply",
+      "reply": "Sure {{name}}! Someone from our team will reach out to you shortly regarding this. 😊\n\nMeanwhile, let me know if you have any other questions about our classes, timings or the Last Attempt Kit."
+    },
+    {
       "id": "objections",
       "match": "regex",
       "keywords": [

@@ -135,6 +135,15 @@ test('handover, pause and resume work in preview without sending messages', asyn
   assert.equal((await post('fees', 'handover')).data.meta.provider, 'openai');
 });
 
+test('a demo request is passed to our team, not refused', async () => {
+  for (const text of ['Foundation Demo Video', 'can I get a demo class?', 'free trial available?', 'send sample videos']) {
+    const { data } = await post(text, 'demo');
+    assert.equal(data.meta.trigger, 'demo', `"${text}" missed the demo reply`);
+    assert.match(data.replies[0], /our team will reach out/);
+    assert.doesNotMatch(data.replies.join(' '), /don.t provide|no demo/i);
+  }
+});
+
 test('invalid requests are rejected before calling the model', async () => {
   const count = calls.length;
   for (const text of ['', '   ', {}, 123, 'x'.repeat(4001)]) assert.equal((await post(text)).status, 400);
